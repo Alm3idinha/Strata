@@ -877,9 +877,9 @@ class ConfigApiKey(unittest.TestCase):
                     code = 0
         return code, seen.get("key"), err.getvalue()
 
-    def test_an_empty_key_is_a_warning(self):
+    def test_an_empty_key_is_a_stop(self):
         code, key, err = self.run_main({"api_key": ""})
-        self.assertEqual((code, key), (0, ""))
+        self.assertEqual((code, key), (2, None))
         self.assertIn("api_key in the config is empty", err)
 
     def test_a_blank_key_is_refused(self):
@@ -893,6 +893,24 @@ class ConfigApiKey(unittest.TestCase):
         code, key, err = self.run_main({})
         self.assertEqual((code, key), (0, ""))
         self.assertNotIn("is empty", err)
+
+    def test_cors_wildcard_without_api_key_is_a_stop(self):
+        code, key, err = self.run_main({"cors_origins": ["*"]})
+        self.assertEqual((code, key), (2, None))
+        self.assertIn("cors_origins \"*\" needs an api_key", err)
+
+    def test_cors_wildcard_with_api_key_passes(self):
+        code, key, err = self.run_main({"cors_origins": ["*"], "api_key": "secret"})
+        self.assertEqual((code, key), (0, "secret"))
+
+    def test_api_monitor_without_api_key_is_a_stop(self):
+        code, key, err = self.run_main({"api_monitor": True})
+        self.assertEqual((code, key), (2, None))
+        self.assertIn("api_monitor needs an api_key", err)
+
+    def test_api_monitor_with_api_key_passes(self):
+        code, key, err = self.run_main({"api_monitor": True, "api_key": "secret"})
+        self.assertEqual((code, key), (0, "secret"))
 
 
 class ApiKeyForms(unittest.TestCase):
@@ -2765,9 +2783,15 @@ class WebApp(unittest.TestCase):
                 self.assertIn(want, ctype)
 
     def test_only_the_app_files_are_served(self):
-        for path in ("/web/..%2Fserver.py", "/web/index.html", "/web/test.py", "/fonts/..%2F..%2Fsetup.py",
-                     "/fonts/missing.woff2", "/fonts/x.ttf"):
-            with self.subTest(path=path):
+        # Paths that should return 400 (bad request) due to path traversal
+        traversal_paths = ("/web/..%2Fserver.py", "/fonts/..%2F..%2Fsetup.py")
+        # Paths that should return 404 (not found) because they are missing or wrong extension
+        not_found_paths = ("/web/index.html", "/web/test.py", "/fonts/missing.woff2", "/fonts/x.ttf")
+        for path in traversal_paths:
+            with self.subTest(path=path, expected=400):
+                self.assertEqual(self.get(path)[0], 400)
+        for path in not_found_paths:
+            with self.subTest(path=path, expected=404):
                 self.assertEqual(self.get(path)[0], 404)
 
     def test_metrics(self):

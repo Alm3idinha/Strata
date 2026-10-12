@@ -1,0 +1,1 @@
+[strata] before_load can execute arbitrary commands and poses a security risk. To enable, set 'before_load_acknowledge_risk': true in the config.
