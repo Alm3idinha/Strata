@@ -79,7 +79,10 @@ function showTab(name) {
   if (location.hash.slice(1) !== tab) history.replaceState(null, "", tab === "chat" ? location.pathname : `#${tab}`);
   if (tab === "chat") $("input").focus();
   if (tab === "monitor") loadMcp();
-  if (tab === "about") loadConfig();
+  if (tab === "about") {
+    loadConfig();
+    loadApiConfig();
+  }
   if (lastMetrics) render(lastMetrics);
 }
 for (const b of document.querySelectorAll(".st-tab")) b.onclick = () => showTab(b.dataset.tab);
@@ -103,10 +106,56 @@ async function loadHealth() {
     $("attach-btn").title = health.images ? "Attach a text file or a picture (or drop it here)"
                                           : "Attach a text file (or drop it here)";
     $("chat-empty-sub").textContent = `${health.model} runs on this PC. Nothing leaves it.`;
+    updateStatusIndicators(health);
   } catch (e) {
     setTimeout(loadHealth, 2000);
   }
 }
+
+function updateStatusIndicators(health) {
+  // Vision
+  const v = $("status-vision");
+  v.dataset.state = health.images ? "ready" : "disabled";
+  v.title = health.images ? "Vision enabled" : "Vision disabled (text-only model)";
+
+  // MCP - will be updated by separate fetch or from health.mcp
+  if (health.mcp) {
+    const m = $("status-mcp");
+    m.dataset.state = health.mcp.status || (health.mcp.enabled ? "ready" : "disabled");
+    m.title = health.mcp.enabled
+      ? `${health.mcp.servers} server(s), ${health.mcp.tools} tool(s) - ${health.mcp.status}`
+      : "MCP not configured";
+  }
+
+  // Built-in tools
+  if (health.builtin_tools) {
+    const b = $("status-builtin");
+    b.dataset.state = health.builtin_tools.enabled ? "ready" : "disabled";
+    b.title = health.builtin_tools.enabled
+      ? `${health.builtin_tools.count} tool(s): ${health.builtin_tools.tools.join(", ")}`
+      : "Built-in tools disabled";
+  }
+}
+
+// Periodic refresh (every 30s) to keep MCP status current
+setInterval(async () => {
+  try {
+    const r = await fetch("/mcp", {headers: headers()});
+    if (r.ok) {
+      const mcp = await r.json();
+      const m = $("status-mcp");
+      if (mcp.servers.length === 0) {
+        m.dataset.state = "disabled";
+        m.title = "MCP not configured";
+      } else {
+        const readyCount = mcp.servers.filter(s => s.status === "ready").length;
+        m.dataset.state = readyCount > 0 ? "ready" :
+                          mcp.servers.some(s => s.status === "starting") ? "starting" : "error";
+        m.title = `${readyCount} ready, ${mcp.tools} tools`;
+      }
+    }
+  } catch (e) { /* ignore */ }
+}, 30000);
 
 // ------------------------------------------------------------------ Monitor
 const METRICS = [
@@ -462,6 +511,217 @@ async function loadConfig() {
   }).join("");
   $("cfg-card").hidden = false;
 }
+
+async function loadApiConfig() {
+  try {
+    const r = await fetch("/api/config/public");
+    if (!r.ok) return;
+    const c = await r.json();
+    renderApiEndpoints(c);
+    renderClientConfigs(c);
+    $("api-endpoints").hidden = false;
+    $("client-configs").hidden = false;
+  } catch (e) { /* ignore */ }
+}
+
+function renderApiEndpoints(c) {
+  const base = c.base_url || `http://${c.host}:${c.port}`;
+  const keyNote = c.api_key_required ? " (API key required)" : "";
+  const rows = [
+    {label: "Base URL", value: base + keyNote},
+    {label: "Model", value: c.model},
+    {label: "Max Context", value: `${(c.max_context / 1024).toFixed(0)}K tokens`},
+    {label: "Vision", value: c.vision ? "Yes" : "No"},
+    {label: "API Key", value: c.api_key_required ? "Required" : "Not required"}
+  ];
+  $("facts-api").innerHTML = rows.map(r => `<dt>${esc(r.label)}</dt><dd>${esc(r.value)}</dd>`).join("");
+
+  document.querySelectorAll("#api-endpoints [data-copy]").forEach(btn => {
+    const path = btn.dataset.copy;
+    btn.dataset.fullUrl = base + path;
+    btn.onclick = () => copyToClipboard(btn.dataset.fullUrl, btn);
+  });
+
+  const testBtn = document.createElement("button");
+  testBtn.className = "st-btn st-btn--secondary";
+  testBtn.style.marginTop = "var(--st-s-3)";
+  testBtn.textContent = "Test Connection";
+  testBtn.onclick = async () => {
+    testBtn.disabled = true;
+    testBtn.textContent = "Testing...";
+    try {
+      const r = await fetch("/health");
+      if (r.ok) {
+        toast("success", "Connection OK", "Server responded successfully");
+      } else {
+        toast("error", "Connection Failed", `HTTP ${r.status}`);
+      }
+    } catch (e) {
+      toast("error", "Connection Failed", String(e));
+    }
+    testBtn.disabled = false;
+    testBtn.textContent = "Test Connection";
+  };
+  const existingTest = document.querySelector("#api-endpoints .test-connection");
+  if (existingTest) existingTest.remove();
+  testBtn.classList.add("test-connection");
+  $("api-endpoints").appendChild(testBtn);
+}
+
+function copyToClipboard(text, btn) {
+  navigator.clipboard.writeText(text).then(() => {
+    const original = btn.innerHTML;
+    btn.innerHTML = `<svg class="st-icon"><use href="web/sprite.svg#i-check"/></svg>`;
+    setTimeout(() => { btn.innerHTML = original; }, 1500);
+  });
+}
+
+function renderClientConfigs(c) {
+  const base = c.base_url || `http://${c.host}:${c.port}`;
+  const model = c.model;
+  const key = c.api_key_required ? "YOUR_API_KEY" : "";
+
+  const configs = {
+    lmstudio: `# LM Studio - OpenAI Compatible
+# Settings > Developer > OpenAI Compatible Server
+Base URL: ${base}/v1
+Model: ${model}
+API Key: ${key || "(leave empty)"}
+
+# Or use the "Local Server" tab and add:
+# Server URL: ${base}/v1
+# Model: ${model}`,
+
+    vscode: `// VS Code - Continue extension (~/.continue/config.json)
+{
+  "models": [
+    {
+      "title": "Strata (${model})",
+      "provider": "openai",
+      "model": "${model}",
+      "apiBase": "${base}/v1",
+      "apiKey": "${key || ""}"
+    }
+  ],
+  "tabAutocompleteModel": {
+    "title": "Strata (${model})",
+    "provider": "openai",
+    "model": "${model}",
+    "apiBase": "${base}/v1"
+  }
+}
+
+// VS Code - CodeGPT extension (settings.json)
+{
+  "codegpt.provider": "openai",
+  "codegpt.openaiApiKey": "${key || ""}",
+  "codegpt.openaiBaseUrl": "${base}/v1",
+  "codegpt.model": "${model}"
+}`,
+
+    kilo: `// Kilo Code - kilo.json provider config
+{
+  "providers": {
+    "strata": {
+      "type": "openai",
+      "base_url": "${base}/v1",
+      "api_key": "${key || ""}",
+      "model": "${model}"
+    }
+  },
+  "default_provider": "strata"
+}
+
+// Or via CLI:
+// kilo config set provider strata
+// kilo config set base_url ${base}/v1`,
+
+    cursor: `// Cursor - Settings > Models > Add Custom Model
+// Or ~/.cursor/mcp.json for MCP servers
+
+// For OpenAI-compatible:
+{
+  "model": "${model}",
+  "apiBase": "${base}/v1",
+  "apiKey": "${key || ""}"
+}
+
+// Cursor also supports Anthropic format at ${base}/v1/messages`,
+
+    openwebui: `# Open WebUI - Admin Panel > Settings > Connections
+# Add OpenAI Connection:
+Name: Strata
+Base URL: ${base}/v1
+API Key: ${key || "(leave empty)"}
+Model: ${model}
+
+# Or via environment variables:
+# OPENAI_API_BASE_URL=${base}/v1
+# OPENAI_API_KEY=${key || ""}
+# DEFAULT_MODEL=${model}`,
+
+    generic: `# Generic OpenAI SDK (Python)
+from openai import OpenAI
+client = OpenAI(
+    base_url="${base}/v1",
+    api_key="${key or ""}"  # or os.getenv("OPENAI_API_KEY")
+)
+response = client.chat.completions.create(
+    model="${model}",
+    messages=[{"role": "user", "content": "Hello!"}]
+)
+
+# Generic Anthropic SDK (Python)
+import anthropic
+client = anthropic.Anthropic(
+    base_url="${base}",
+    api_key="${key or ""}"
+)
+response = client.messages.create(
+    model="${model}",
+    max_tokens=1024,
+    messages=[{"role": "user", "content": "Hello!"}]
+)
+
+# cURL (OpenAI)
+curl ${base}/v1/chat/completions \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer ${key}" \
+  -d '{"model": "${model}", "messages": [{"role": "user", "content": "Hello!"}]}'
+
+# cURL (Anthropic)
+curl ${base}/v1/messages \
+  -H "Content-Type: application/json" \
+  -H "x-api-key: ${key}" \
+  -H "anthropic-version: 2023-06-01" \
+  -d '{"model": "${model}", "max_tokens": 1024, "messages": [{"role": "user", "content": "Hello!"}]}'`
+  };
+
+  Object.entries(configs).forEach(([client, content]) => {
+    const panel = $(`panel-${client}`);
+    if (panel) {
+      panel.innerHTML = codeBlock("text", content);
+      panel.querySelectorAll("[data-code-copy]").forEach(btn => {
+        btn.onclick = () => {
+          const code = panel.querySelector("pre code").textContent;
+          copyToClipboard(code, btn);
+        };
+      });
+    }
+  });
+
+  document.querySelectorAll(".client-tab").forEach(tab => {
+    tab.onclick = () => {
+      document.querySelectorAll(".client-tab").forEach(t => {
+        t.setAttribute("aria-selected", "false");
+      });
+      document.querySelectorAll(".client-panel").forEach(p => p.hidden = true);
+      tab.setAttribute("aria-selected", "true");
+      $(`panel-${tab.dataset.client}`).hidden = false;
+    };
+  });
+}
+
 function configValue(k, el) {
   const s = el.value.trim();
   if (s === "") return null;

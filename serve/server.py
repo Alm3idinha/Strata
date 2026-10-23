@@ -4862,9 +4862,51 @@ def make_handler(svc: Service):
                 self.end_headers()
                 self.wfile.write(body)
             elif path in ("/health", "/api/health"):
-                self._json(200, {"status": "ok", "max_context": svc.reported_ctx(), "model": svc.model,
-                                 "images": svc.vision is not None, "api_key": bool(svc.api_key),
-                                 "loaded": svc.loaded(), "service": "strata"})
+                mcp_info = {"enabled": False, "servers": 0, "tools": 0, "status": "disabled"}
+                if svc.mcp:
+                    routes = svc.mcp.routes()
+                    ready_servers = sum(1 for s in svc.mcp.servers.values() if s.status in ("ready", "stopped"))
+                    mcp_info = {
+                        "enabled": True,
+                        "servers": ready_servers,
+                        "tools": len(routes),
+                        "status": "ready" if ready_servers > 0 else "starting"
+                    }
+
+                builtin_info = {"enabled": False, "tools": [], "count": 0}
+
+                self._json(200, {
+                    "status": "ok",
+                    "max_context": svc.reported_ctx(),
+                    "model": svc.model,
+                    "images": svc.vision is not None,
+                    "api_key": bool(svc.api_key),
+                    "loaded": svc.loaded(),
+                    "service": "strata",
+                    "mcp": mcp_info,
+                    "builtin_tools": builtin_info
+                })
+            elif path in ("/api/config/public", "/config/public"):
+                # Public config info for frontend (no auth needed - safe info only)
+                self._json(200, {
+                    "host": svc.host,
+                    "port": svc.port,
+                    "base_url": f"http://{svc.host}:{svc.port}",
+                    "api_key_required": bool(svc.api_key),
+                    "cors_origins": svc.cors_origins or [],
+                    "endpoints": {
+                        "openai_chat": "/v1/chat/completions",
+                        "openai_models": "/v1/models",
+                        "anthropic_messages": "/v1/messages",
+                        "health": "/health",
+                        "health_alt": "/api/health",
+                        "metrics": "/metrics",
+                        "mcp": "/mcp"
+                    },
+                    "model": svc.model,
+                    "max_context": svc.reported_ctx(),
+                    "vision": svc.vision is not None
+                })
             elif path == "/status":
                 if not self._authorized():                  # #212: it shows the end of the last answer
                     return
@@ -4932,6 +4974,9 @@ def make_handler(svc: Service):
                 return
             path = self.path.split("?")[0].rstrip("/")   # issue #55: Claude Code posts /v1/messages?beta=true
             if path.startswith("/v1/") and self._foreign_page():
+                return
+            if path == "/api/upload":
+                self._handle_upload()
                 return
             if path == "/settings":
                 self._settings()
@@ -5096,6 +5141,127 @@ def make_handler(svc: Service):
             if version:
                 props["build_info"] = "Strata " + str(version)
             self._json(200, props)
+
+        def _handle_upload(self):
+            """Handle multipart file uploads for chat attachments."""
+            # Check content type
+            content_type = self.headers.get("Content-Type", "")
+            if not content_type.startswith("multipart/form-data"):
+                self._json(415, {"error": {"message": "send multipart/form-data"}})
+                return
+            
+            # Parse multipart form data
+            import email.parser
+            import io
+            
+            boundary = content_type.split("boundary=")[-1].strip('"')
+            if not boundary:
+                self._json(400, {"error": {"message": "missing boundary"}})
+                return
+            
+            # Read body
+            try:
+                length = int(self.headers.get("Content-Length", "0"))
+            except ValueError:
+                self._json(400, {"error": {"message": "invalid Content-Length"}})
+                return
+            
+            if length > svc.max_upload_bytes:
+                self._json(413, {"error": {"message": f"file too large (max {svc.max_upload_mb} MB)"}})
+                return
+            
+            body = self.rfile.read(length)
+            
+            # Parse multipart
+            parser = email.parser.BytesParser()
+            msg = parser.parsebytes(b"Content-Type: " + content_type.encode() + b"\r\n\r\n" + body)
+            
+            files = []
+            for part in msg.walk():
+                if part.get_content_disposition() == "form-data":
+                    name = part.get_param("name", header="content-disposition")
+                    if name == "files":
+                        filename = part.get_filename()
+                        if filename:
+                            content = part.get_payload(decode=True)
+                            if content:
+                                files.append({
+                                    "filename": filename,
+                                    "content": content,
+                                    "mime_type": part.get_content_type(),
+                                    "size": len(content)
+                                })
+            
+            if not files:
+                self._json(400, {"error": {"message": "no files uploaded"}})
+                return
+            
+            # Process files - determine type and prepare for chat
+            processed = []
+            for f in files:
+                mime = f["mime_type"] or ""
+                filename = f["filename"]
+                content = f["content"]
+                
+                # Determine file type
+                if mime.startswith("image/") or any(filename.lower().endswith(ext) for ext in [".png", ".jpg", ".jpeg", ".webp", ".gif", ".bmp"]):
+                    # Image file
+                    import base64
+                    b64 = base64.b64encode(content).decode()
+                    processed.append({
+                        "type": "image",
+                        "filename": filename,
+                        "mime_type": mime or "image/png",
+                        "base64": b64,
+                        "size": len(content)
+                    })
+                elif mime == "application/pdf" or filename.lower().endswith(".pdf"):
+                    # PDF - extract text
+                    try:
+                        import fitz  # PyMuPDF
+                        doc = fitz.open(stream=content, filetype="pdf")
+                        text = "\n".join(page.get_text() for page in doc)
+                        doc.close()
+                        processed.append({
+                            "type": "text",
+                            "filename": filename,
+                            "content": text[:50000],  # Limit to 50k chars
+                            "size": len(content),
+                            "truncated": len(text) > 50000
+                        })
+                    except Exception:
+                        # Fallback: treat as binary
+                        processed.append({
+                            "type": "binary",
+                            "filename": filename,
+                            "size": len(content)
+                        })
+                elif mime.startswith("text/") or any(filename.lower().endswith(ext) for ext in [".txt", ".md", ".json", ".csv", ".py", ".js", ".ts", ".html", ".css", ".xml", ".yaml", ".yml", ".toml", ".ini", ".cfg", ".conf", ".log"]):
+                    # Text file
+                    try:
+                        text = content.decode("utf-8")
+                        processed.append({
+                            "type": "text",
+                            "filename": filename,
+                            "content": text[:50000],
+                            "size": len(content),
+                            "truncated": len(text) > 50000
+                        })
+                    except UnicodeDecodeError:
+                        processed.append({
+                            "type": "binary",
+                            "filename": filename,
+                            "size": len(content)
+                        })
+                else:
+                    # Other binary file
+                    processed.append({
+                        "type": "binary",
+                        "filename": filename,
+                        "size": len(content)
+                    })
+            
+            self._json(200, {"files": processed})
 
         def _control_body(self) -> bool:
             """Consume the unused control body before replying/closing (Windows otherwise sends a TCP reset)."""
@@ -6305,6 +6471,9 @@ def main() -> int:
         svc.before_load = None
     # Rate limiting: requests per minute per IP (0 = disabled)
     svc.rate_limit_rpm = a.rate_limit_rpm if a.rate_limit_rpm is not None else int(cfg.get("rate_limit_rpm") or 0)
+    # Max upload size for attachments (MB)
+    svc.max_upload_mb = a.max_upload_mb if a.max_upload_mb is not None else int(cfg.get("max_upload_mb") or 10)
+    svc.max_upload_bytes = svc.max_upload_mb * 1024 * 1024
     # --slot-save-path is relative to the working directory the server was started in; the config's slot_save_path
     # to the config's "cwd" (the engine's folder) when it has one.  Either way the engine gets an absolute path.
     if a.slot_save_path or cfg.get("slot_save_path"):

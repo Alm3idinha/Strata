@@ -13,6 +13,52 @@ main { flex: 1; min-height: 0; display: flex; }
 .st-header .st-tabs { margin-left: var(--st-s-4); }
 #drawer-close .st-icon { transform: rotate(-90deg); }
 
+/* status indicators in header */
+.st-status-group {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--st-s-2);
+  margin-left: var(--st-s-3);
+}
+.st-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 28px;
+  padding: 0 10px;
+  border-radius: var(--st-r-pill);
+  border: 1px solid var(--st-line);
+  background: var(--st-surface-2);
+  font-size: var(--st-fs-xs);
+  font-weight: var(--st-fw-medium);
+  color: var(--st-ink-muted);
+  transition: all var(--st-dur) var(--st-ease);
+}
+.st-status[data-state="ready"] {
+  background: var(--st-accent-tint);
+  border-color: var(--st-accent);
+  color: var(--st-accent-text);
+}
+.st-status[data-state="starting"] {
+  background: var(--st-info-tint);
+  border-color: var(--st-info);
+  color: var(--st-info-text);
+}
+.st-status[data-state="error"] {
+  background: var(--st-danger-tint);
+  border-color: var(--st-danger);
+  color: var(--st-danger-text);
+}
+.st-status[data-state="disabled"] {
+  opacity: 0.5;
+}
+.st-status__text {
+  display: none;
+}
+@media (min-width: 640px) {
+  .st-status__text { display: inline; }
+}
+
 /* ---------------------------------------------------------------- chat */
 .chat-scroll { flex: 1; min-height: 0; overflow-y: auto; }
 .chat { max-width: 860px; margin: 0 auto; padding: var(--st-s-8) var(--st-s-6) var(--st-s-6); display: flex;
@@ -157,7 +203,7 @@ main { flex: 1; min-height: 0; display: flex; }
 
 /* ---------------------------------------------------------------- drawer */
 .st-drawer { z-index: 40; }
-.scrim { position: fixed; inset: 0; background: rgba(15, 23, 42, .18); z-index: 39; }
+.scrim { position: fixed; inset: 0; background: var(--st-scrim, rgba(15, 23, 42, .18)); z-index: 39; }
 .seg { display: grid; grid-template-columns: repeat(4, 1fr); gap: 4px; padding: 4px; background: var(--st-surface-2);
        border: 1px solid var(--st-line); border-radius: var(--st-r-md); }
 .seg button { height: 32px; border: 0; border-radius: 10px; background: transparent; color: var(--st-ink-muted);
@@ -188,3 +234,22 @@ main { flex: 1; min-height: 0; display: flex; }
   .facts { grid-template-columns: 1fr; gap: 2px; }
   .facts dd { margin-bottom: var(--st-s-2); }
 }
+
+/* API endpoints & client configs */
+.api-endpoints { margin-top: var(--st-s-4); padding-top: var(--st-s-4); border-top: 1px solid var(--st-line); }
+.endpoint-group { margin-bottom: var(--st-s-3); }
+.endpoint-group h4 { font-size: var(--st-fs-sm); font-weight: var(--st-fw-bold); color: var(--st-ink); margin-bottom: var(--st-s-2); }
+.endpoint-row { display: flex; align-items: center; justify-content: space-between; gap: var(--st-s-2); padding: var(--st-s-2) var(--st-s-3); background: var(--st-surface-2); border: 1px solid var(--st-line); border-radius: var(--st-r-sm); margin-bottom: var(--st-s-1); font-size: var(--st-fs-sm); }
+.endpoint-row span { font-family: var(--st-font-mono); color: var(--st-ink-soft); }
+.endpoint-row .st-btn--icon { opacity: 0.5; }
+.endpoint-row .st-btn--icon:hover { opacity: 1; background: var(--st-surface); }
+
+.client-configs { margin-top: var(--st-s-5); padding-top: var(--st-s-4); border-top: 1px solid var(--st-line); }
+.client-configs h4 { font-size: var(--st-fs-sm); font-weight: var(--st-fw-bold); color: var(--st-ink); margin-bottom: var(--st-s-3); }
+.client-tabs { display: flex; gap: var(--st-s-1); flex-wrap: wrap; margin-bottom: var(--st-s-4); border-bottom: 1px solid var(--st-line); padding-bottom: var(--st-s-2); }
+.client-tab { padding: var(--st-s-1) var(--st-s-3); border: 1px solid transparent; border-bottom: none; background: transparent; color: var(--st-ink-muted); font: 500 var(--st-fs-sm) var(--st-font); border-radius: var(--st-r-sm) var(--st-r-sm) 0 0; cursor: pointer; margin-bottom: -1px; }
+.client-tab:hover { color: var(--st-ink); background: var(--st-surface-2); }
+.client-tab[aria-selected="true"] { color: var(--st-ink); background: var(--st-surface); border-color: var(--st-line); border-bottom-color: var(--st-surface); font-weight: var(--st-fw-bold); }
+.client-panel { animation: fade-in 120ms var(--st-ease); }
+@keyframes fade-in { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
+.client-panel .st-code { margin: 0; }
