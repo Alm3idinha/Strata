@@ -663,38 +663,38 @@ Model: ${model}
     generic: `# Generic OpenAI SDK (Python)
 from openai import OpenAI
 client = OpenAI(
-    base_url="${base}/v1",
-    api_key="${key or ""}"  # or os.getenv("OPENAI_API_KEY")
+    base_url="\${base}/v1",
+    api_key="\${key || \"\"}"  # or os.getenv("OPENAI_API_KEY")
 )
 response = client.chat.completions.create(
-    model="${model}",
+    model="\${model}",
     messages=[{"role": "user", "content": "Hello!"}]
 )
 
 # Generic Anthropic SDK (Python)
 import anthropic
 client = anthropic.Anthropic(
-    base_url="${base}",
-    api_key="${key or ""}"
+    base_url="\${base}",
+    api_key="\${key || \"\"}"
 )
 response = client.messages.create(
-    model="${model}",
+    model="\${model}",
     max_tokens=1024,
     messages=[{"role": "user", "content": "Hello!"}]
 )
 
 # cURL (OpenAI)
-curl ${base}/v1/chat/completions \
+curl \${base}/v1/chat/completions \
   -H "Content-Type: application/json" \
-  -H "Authorization: Bearer ${key}" \
-  -d '{"model": "${model}", "messages": [{"role": "user", "content": "Hello!"}]}'
+  -H "Authorization: Bearer \${key}" \
+  -d '{"model": "\${model}", "messages": [{"role": "user", "content": "Hello!"}]}'
 
 # cURL (Anthropic)
-curl ${base}/v1/messages \
+curl \${base}/v1/messages \
   -H "Content-Type: application/json" \
-  -H "x-api-key: ${key}" \
+  -H "x-api-key: \${key}" \
   -H "anthropic-version: 2023-06-01" \
-  -d '{"model": "${model}", "max_tokens": 1024, "messages": [{"role": "user", "content": "Hello!"}]}'`
+  -d '{"model": "\${model}", "max_tokens": 1024, "messages": [{"role": "user", "content": "Hello!"}]}'`
   };
 
   Object.entries(configs).forEach(([client, content]) => {
@@ -986,9 +986,11 @@ function apiMessages() {
   for (const m of messages) {
     if (m.role === "user") {
       const imgs = (m.images || []).filter((i) => i.url);
+      const textFiles = (m.files || []).filter((f) => f.text);
       const text = userText(m);
-      out.push({role: "user", content: imgs.length ? [{type: "text", text},
-        ...imgs.map((i) => ({type: "image_url", image_url: {url: i.url}}))] : text});
+      const content = imgs.length ? [{type: "text", text},
+        ...imgs.map((i) => ({type: "image_url", image_url: {url: i.url}}))] : text;
+      out.push({role: "user", content});
     } else if (!(busy && busy.msg === m)) {            // the answer being asked for now is not history yet
       out.push(...assistantMessages(m));
     }
@@ -1166,27 +1168,32 @@ function isTextFile(f) {
   return f.type.startsWith("text/") || /json|xml|javascript|yaml|toml|x-sh|x-python/.test(f.type) ||
          TEXT_EXT.test(f.name) || /(^|[\\/])(makefile|dockerfile|readme|license)$/i.test(f.name);
 }
-function addFiles(files) {
-  for (const f of files) {
-    if (f.type.startsWith("image/")) {
-      if (!health.images) { toast("warn", "Pictures are off", "This model was set up for text only."); continue; }
-      if (f.size > 20e6) { toast("warn", "Picture too large", `${f.name} is over 20 MB.`); continue; }
-      const r = new FileReader();
-      r.onload = () => { attachments.push({kind: "image", name: f.name || "pasted image", url: r.result}); renderAttachments(); };
-      r.readAsDataURL(f);
-      continue;
-    }
-    if (!isTextFile(f)) { toast("warn", "Not a text file", `${f.name}: attach text files (code, notes, logs, data)${health.images ? " or pictures" : ""}.`); continue; }
-    if (f.size > MAX_TEXT_FILE) { toast("warn", "File too large", `${f.name} is over 512 KB.`); continue; }
-    const r = new FileReader();
-    r.onload = () => {
-      const text = String(r.result);
-      if (text.includes("\u0000")) { toast("warn", "Not a text file", `${f.name} looks like a binary file.`); return; }
-      attachments.push({kind: "file", name: f.name, text});
-      renderAttachments();
-    };
-    r.readAsText(f);
+async function uploadFiles(files) {
+  const form = new FormData();
+  for (const f of files) form.append("files", f);
+  const r = await fetch("/api/upload", {method: "POST", headers: headers(), body: form});
+  if (!r.ok) {
+    let msg = `HTTP ${r.status}`;
+    try { msg = (await r.json()).error?.message || msg; } catch (e) { /* not json */ }
+    throw new Error(msg);
   }
+  return r.json();
+}
+function addFiles(files) {
+  uploadFiles([...files]).then(data => {
+    for (const f of data.files) {
+      if (f.type === "image") {
+        if (!health.images) { toast("warn", "Pictures are off", "This model was set up for text only."); continue; }
+        attachments.push({kind: "image", name: f.filename, url: `data:${f.mime_type};base64,${f.base64}`, size: f.size});
+      } else if (f.type === "text") {
+        attachments.push({kind: "file", name: f.filename, text: f.content, size: f.size, truncated: f.truncated});
+      } else {
+        toast("warn", "Unsupported file", `${f.filename}: only images, PDFs, and text files are supported.`);
+        continue;
+      }
+      renderAttachments();
+    }
+  }).catch(e => toast("error", "Upload failed", e.message, 6000));
 }
 // a file's text in the message, fenced with more backticks than it contains itself
 function fileBlock(f) {
@@ -1207,6 +1214,20 @@ function renderAttachments() {
     c.className = "chip";
     c.innerHTML = icon(a.kind === "file" ? "attach" : "image", "st-icon st-icon--sm");
     c.append(a.name);
+    if (a.truncated) {
+      const t = document.createElement("span");
+      t.className = "muted";
+      t.style.marginLeft = "4px";
+      t.textContent = " (truncated)";
+      c.appendChild(t);
+    }
+    if (a.size) {
+      const s = document.createElement("span");
+      s.className = "muted";
+      s.style.marginLeft = "4px";
+      s.textContent = ` (${formatBytes(a.size)})`;
+      c.appendChild(s);
+    }
     const x = document.createElement("button");
     x.type = "button"; x.className = "st-btn st-btn--icon"; x.setAttribute("aria-label", "Remove");
     x.innerHTML = icon("trash");
@@ -1214,6 +1235,12 @@ function renderAttachments() {
     c.appendChild(x);
     box.appendChild(c);
   });
+}
+
+function formatBytes(bytes) {
+  if (bytes < 1024) return bytes + " B";
+  if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + " KB";
+  return (bytes / (1024 * 1024)).toFixed(1) + " MB";
 }
 $("attach-btn").onclick = () => $("file").click();
 // drop files on the chat or the message box
@@ -1235,9 +1262,12 @@ for (const id of ["chat", "composer"]) {
 }
 $("file").onchange = () => { addFiles($("file").files); $("file").value = ""; };
 $("input").addEventListener("paste", (e) => {
-  if (!health.images) return;
-  const files = [...(e.clipboardData || {}).files || []].filter((f) => f.type.startsWith("image/"));
-  if (files.length) { e.preventDefault(); addFiles(files); }
+  const files = [...(e.clipboardData || {}).files || []];
+  if (!files.length) return;
+  const images = files.filter((f) => f.type.startsWith("image/"));
+  const textFiles = files.filter((f) => f.type.startsWith("text/") || f.name.match(/\.(txt|md|json|csv|py|js|ts|html|css|xml|yaml|yml|toml|ini|cfg|conf|log)$/i));
+  if (images.length && health.images) { e.preventDefault(); addFiles(images); }
+  if (textFiles.length) { e.preventDefault(); addFiles(textFiles); }
 });
 
 // ------------------------------------------------------------------ the sampling drawer

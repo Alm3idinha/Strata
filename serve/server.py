@@ -6290,9 +6290,11 @@ def main() -> int:
     ap.add_argument("--rate-limit-rpm", type=int, default=None, metavar="RPM",
                      help="maximum requests per minute per IP address (0 = disabled, also \"rate_limit_rpm\" in the config)")
     ap.add_argument("--replicas", type=int, default=None, metavar="N",
-                    help="data-parallel replicas (opt-in): cut the \"gpu\" list into N equal groups and run one engine on "
-                         "each, requests spread over them (also \"replicas\" in the config: a number, or "
-                         "[{\"gpus\": [0, 1]}, {\"gpus\": [2, 3]}])")
+                     help="data-parallel replicas (opt-in): cut the \"gpu\" list into N equal groups and run one engine on "
+                          "each, requests spread over them (also \"replicas\" in the config: a number, or "
+                          "[{\"gpus\": [0, 1]}, {\"gpus\": [2, 3]}])")
+    ap.add_argument("--max-upload-mb", type=int, default=None, metavar="MB",
+                     help="maximum upload size for attachments in MB (default 10, also \"max_upload_mb\" in the config)")
     a = ap.parse_args()
     cfg = json.loads(Path(a.config).read_text(encoding="utf-8-sig")) if a.config else {}   # Notepad adds a BOM
     lift_reasoning_effort_arg(cfg)
