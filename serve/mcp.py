@@ -380,7 +380,7 @@ class HttpTransport:
 class McpServer:
     """One configured server: started once (and again after it stopped), with the tools it listed."""
 
-    def __init__(self, name: str, cfg: dict, settings: dict):
+    def __init__(self, name: str, cfg: dict, settings: dict, tools_enabled: dict | None = None):
         self.name, self.cfg, self.settings = name, cfg, settings
         self.kind = "http" if cfg.get("url") else "stdio"
         self.status = "idle"             # idle -> starting -> ready | failed; ready -> stopped when it ends
@@ -390,6 +390,8 @@ class McpServer:
         self.transport = None
         self.lock = threading.Lock()
         self.last_start = 0.0
+        self.enabled = True
+        self.tools_enabled = tools_enabled or {}  # tool_name -> bool
 
     def start(self) -> bool:
         with self.lock:
@@ -494,11 +496,32 @@ def _clean(name: str) -> str:
 class McpHub:
     """Every configured server, and the merged, namespaced tool list the model sees."""
 
-    def __init__(self, servers: dict[str, dict], settings: dict | None = None):
+    def __init__(self, servers: dict[str, dict], settings: dict | None = None, tools_enabled: dict | None = None):
         self.settings = {**DEFAULTS, **(settings or {})}
-        self.servers = {name: McpServer(name, cfg, self.settings) for name, cfg in servers.items()}
+        self.tools_enabled = tools_enabled or {}  # "server__tool" -> bool
+        self.servers = {name: McpServer(name, cfg, self.settings, self.tools_enabled)
+                        for name, cfg in servers.items()}
         self.threads: list[threading.Thread] = []
         self._routes: dict[str, tuple[McpServer, str]] = {}
+
+    def is_tool_enabled(self, server_name: str, tool_name: str) -> bool:
+        """Check if a specific tool is enabled. Defaults to True if not explicitly set."""
+        key = f"{server_name}__{tool_name}"
+        return self.tools_enabled.get(key, True)
+
+    def set_tool_enabled(self, server_name: str, tool_name: str, enabled: bool):
+        """Set the enabled state of a tool."""
+        key = f"{server_name}__{tool_name}"
+        if enabled:
+            self.tools_enabled.pop(key, None)
+        else:
+            self.tools_enabled[key] = False
+
+    def set_server_enabled(self, server_name: str, enabled: bool):
+        """Set the enabled state of a server (all its tools)."""
+        s = self.servers.get(server_name)
+        if s:
+            s.enabled = enabled
 
     def start(self, wait: bool = False):
         """Start every server on its own thread (npx may download a package first: that must not delay the chat)."""
@@ -520,9 +543,13 @@ class McpHub:
         its tools here: a call starts it again."""
         out = {}
         for s in self.servers.values():
+            if not s.enabled:
+                continue
             if s.status not in ("ready", "stopped"):
                 continue
             for t in s.tools:
+                if not self.is_tool_enabled(s.name, t["name"]):
+                    continue
                 name = f"{_clean(s.name)}__{_clean(t['name'])}"[:64]
                 n = 2
                 while name in out:                       # two names that differ only in cleaned characters
@@ -557,16 +584,20 @@ class McpHub:
         if server is None:
             text, ok = f"error: there is no tool named {name!r}", False
         else:
-            try:
-                res = server.call(tool, arguments if isinstance(arguments, dict) else {},
-                                  float(self.settings["timeout_s"]), cancel)
-                text, ok = result_text(res), not res.get("isError")
-                if not ok:
-                    text = "error: " + (text or "the tool reported an error")
-            except McpCancelled:
-                raise
-            except McpError as e:
-                text, ok = f"error: {e}", False
+            # Check if tool is enabled
+            if not self.is_tool_enabled(server.name, tool):
+                text, ok = f"error: tool {tool!r} on server {server.name!r} is disabled", False
+            else:
+                try:
+                    res = server.call(tool, arguments if isinstance(arguments, dict) else {},
+                                      float(self.settings["timeout_s"]), cancel)
+                    text, ok = result_text(res), not res.get("isError")
+                    if not ok:
+                        text = "error: " + (text or "the tool reported an error")
+                except McpCancelled:
+                    raise
+                except McpError as e:
+                    text, ok = f"error: {e}", False
         cap = int(self.settings["max_result_chars"])
         full = len(text)
         if cap > 0 and full > cap:
@@ -583,9 +614,10 @@ class McpHub:
         for s in self.servers.values():
             names = {tool: n for n, (srv, tool) in routes.items() if srv is s}
             servers.append({"name": s.name, "transport": s.kind, "status": s.status, "error": s.error,
-                            "info": s.info,
+                            "info": s.info, "enabled": s.enabled,
                             "tools": [{"name": names.get(t["name"], t["name"]), "tool": t["name"],
-                                       "description": str(t.get("description") or "")[:300]} for t in s.tools]})
+                                       "description": str(t.get("description") or "")[:300],
+                                       "enabled": self.is_tool_enabled(s.name, t["name"])} for t in s.tools]})
         return {"servers": servers, "tools": len(routes),
                 "settings": {k: self.settings[k] for k in ("timeout_s", "max_result_chars", "max_rounds")}}
 
@@ -595,6 +627,10 @@ class McpHub:
                 s.close()
             except Exception:  # noqa: BLE001 - closing is best effort
                 pass
+
+    def get_tools_enabled_config(self) -> dict:
+        """Return the tools_enabled config for persistence."""
+        return dict(self.tools_enabled)
 
 
 # ------------------------------------------------------------------------------------------------ config
@@ -663,7 +699,8 @@ def hub_from_config(cfg: dict, mcp_config_path: str | None = None) -> McpHub | N
         servers.update(servers_from(block, f"--mcp-config {mcp_config_path}"))
     if not servers:
         return None
-    return McpHub(servers, settings_from(cfg))
+    tools_enabled = cfg.get("mcp_tools_enabled") or {}
+    return McpHub(servers, settings_from(cfg), tools_enabled)
 
 
 if __name__ == "__main__":                               # python -m serve.mcp config.json: list what a config offers
