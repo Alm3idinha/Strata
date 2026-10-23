@@ -4978,6 +4978,9 @@ def make_handler(svc: Service):
             if path == "/api/upload":
                 self._handle_upload()
                 return
+            if path == "/mcp/toggle":
+                self._mcp_toggle()
+                return
             if path == "/settings":
                 self._settings()
                 return
@@ -5347,6 +5350,43 @@ def make_handler(svc: Service):
                 print(f"[strata] the Settings view changed {', '.join(changed)} in {Path(svc.config_path).name} "
                       f"(the earlier file: {bak.name}); used from the next start", flush=True)
             self._json(200, {**runconfig.view(new, svc.config_path), "changed": changed})
+
+        def _mcp_toggle(self):
+            """Toggle MCP tool/server enabled state - JSON from Strata's own page only."""
+            body = self._body()
+            if not self._own_page("MCP tools can be toggled"):
+                return
+            if not svc.mcp:
+                self._json(404, {"error": {"message": "no MCP servers configured"}})
+                return
+            try:
+                req = json.loads(body or b"{}")
+                server_name = req.get("server")
+                tool_name = req.get("tool")
+                enabled = req.get("enabled")
+                if not isinstance(enabled, bool):
+                    self._json(400, {"error": {"message": "enabled must be a boolean"}})
+                    return
+                if server_name and not tool_name:
+                    # Toggle entire server
+                    svc.mcp.set_server_enabled(server_name, enabled)
+                elif server_name and tool_name:
+                    # Toggle specific tool
+                    svc.mcp.set_tool_enabled(server_name, tool_name, enabled)
+                else:
+                    self._json(400, {"error": {"message": "server is required"}})
+                    return
+                # Persist to config
+                if svc.config_path:
+                    with svc.config_lock:
+                        cfg = runconfig.load(svc.config_path)
+                        cfg["mcp_tools_enabled"] = svc.mcp.get_tools_enabled_config()
+                        runconfig.save(svc.config_path, cfg)
+                self._json(200, {"ok": True, "tools_enabled": svc.mcp.get_tools_enabled_config()})
+            except ValueError as e:
+                self._json(400, {"error": {"type": "invalid_request_error", "message": str(e)}})
+            except OSError as e:
+                self._json(500, {"error": {"type": "server_error", "message": f"config cannot be written: {e}"}})
         def _foreign_origin(self) -> bool:
             """A web page of another origin sent this.  The Origin must be this server's own address (host and port),
             or an origin the config trusts (trusted_origins: the web app behind a reverse proxy or tunnel); no Origin

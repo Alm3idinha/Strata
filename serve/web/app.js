@@ -55,21 +55,59 @@ async function copyText(text, btn) {
 
 // ------------------------------------------------------------------ theme and tabs
 // the system's theme until the user picks one (only a click is saved)
+const THEMES = ["light", "dark", "glass-light", "glass-dark"];
+const THEME_ICONS = {light: "sun", dark: "moon", "glass-light": "layers", "glass-dark": "layers"};
+
 function setTheme(t, save) {
   document.documentElement.dataset.theme = t;
   if (save) try { localStorage.setItem("strata.theme", t); } catch (e) { /* ignore */ }
-  $("theme-icon").setAttribute("href", `${SPRITE}#i-${t === "dark" ? "sun" : "moon"}`);
-  $("dark-toggle").setAttribute("aria-checked", String(t === "dark"));
+  const icon = THEME_ICONS[t] || (t === "dark" ? "sun" : "moon");
+  $("theme-icon").setAttribute("href", `${SPRITE}#i-${icon}`);
+  // Update dropdown selection
+  document.querySelectorAll("#theme-dropdown [role=option]").forEach(opt => {
+    opt.setAttribute("aria-selected", String(opt.dataset.theme === t));
+  });
 }
-const flipTheme = () => setTheme(document.documentElement.dataset.theme === "dark" ? "light" : "dark", true);
-$("theme-btn").onclick = flipTheme;
-$("dark-toggle").onclick = flipTheme;
-setTheme(document.documentElement.dataset.theme || "light", false);
+
+// Theme dropdown toggle
+const themeTrigger = $("theme-trigger");
+const themeDropdown = $("#theme-dropdown");
+themeTrigger.onclick = (e) => {
+  e.stopPropagation();
+  const expanded = themeTrigger.getAttribute("aria-expanded") === "true";
+  themeTrigger.setAttribute("aria-expanded", String(!expanded));
+  themeDropdown.hidden = expanded;
+};
+themeDropdown.querySelectorAll("[role=option]").forEach(opt => {
+  opt.onclick = () => {
+    setTheme(opt.dataset.theme, true);
+    themeTrigger.setAttribute("aria-expanded", "false");
+    themeDropdown.hidden = true;
+  };
+});
+document.addEventListener("click", () => {
+  themeTrigger.setAttribute("aria-expanded", "false");
+  themeDropdown.hidden = true;
+});
+
+// Initialize theme from localStorage or system preference
+try {
+  const saved = localStorage.getItem("strata.theme");
+  const initial = saved || (matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");
+  setTheme(initial, false);
+} catch (e) {
+  setTheme("light", false);
+}
+
 matchMedia("(prefers-color-scheme: dark)").addEventListener("change", (e) => {
   let saved = null;
   try { saved = localStorage.getItem("strata.theme"); } catch (err) { /* ignore */ }
   if (!saved) setTheme(e.matches ? "dark" : "light", false);
 });
+
+// Dark toggle in settings drawer (kept for backward compatibility)
+const flipTheme = () => setTheme(document.documentElement.dataset.theme === "dark" ? "light" : "dark", true);
+$("dark-toggle").onclick = flipTheme;
 
 let tab = "chat";
 function showTab(name) {
@@ -471,16 +509,56 @@ function renderMcp() {
   const ready = servers.filter((s) => s.status === "ready" || s.status === "stopped");
   $("mcp-sum").textContent = servers.length ? `${fmt(mcpInfo.tools)} tools · ${ready.length} of ${servers.length} servers connected` : "";
   $("mcp-row-sub").textContent = mcpInfo.tools ? `${fmt(mcpInfo.tools)} tools from ${ready.map((s) => s.name).join(", ")}; the model calls them when it decides to`
-                                               : "no server is connected yet (see the Monitor)";
+                                                : "no server is connected yet (see the Monitor)";
   $("mcp-list").innerHTML = servers.map((s) => {
     const [cls, text] = MCP_STATE[s.status] || ["", s.status];
     const info = s.info && s.info.name ? ` · ${s.info.name}${s.info.version ? ` ${s.info.version}` : ""}` : "";
+    const serverEnabled = s.enabled !== false;
+    const serverToggle = `<label class="toggle-row" style="margin-left:auto;gap:8px;"><span class="muted small">${serverEnabled ? "Enabled" : "Disabled"}</span><button class="st-toggle mcp-server-toggle" data-server="${esc(s.name)}" role="switch" aria-checked="${serverEnabled}" aria-label="Toggle server"></button></label>`;
     return `<div class="mcp-server"><div class="mcp-server__head"><span class="st-badge ${cls}">${esc(text)}</span>` +
-      `<strong>${esc(s.name)}</strong><span class="muted small">${esc(s.transport)} · ${fmt(s.tools.length)} tools${esc(info)}</span></div>` +
+      `<strong>${esc(s.name)}</strong><span class="muted small">${esc(s.transport)} · ${fmt(s.tools.length)} tools${esc(info)}</span>` +
+      serverToggle + `</div>` +
       (s.error ? `<div class="msg-error">${esc(s.error)}</div>` : "") +
-      (s.tools.length ? `<div class="mcp-server__tools">${s.tools.map((t) => `<span class="chip" title="${esc(t.description || "")}">${esc(t.tool)}</span>`).join("")}</div>` : "") +
+      (s.tools.length ? `<div class="mcp-server__tools">${s.tools.map((t) => `
+        <label class="mcp-tool-toggle" title="${esc(t.description || "")}">
+          <input type="checkbox" class="mcp-tool-checkbox" data-server="${esc(s.name)}" data-tool="${esc(t.tool)}" ${t.enabled !== false ? "checked" : ""}>
+          <span class="tool-name">${esc(t.tool)}</span>
+        </label>
+      `).join("")}</div>` : "") +
       `</div>`;
   }).join("");
+
+  // Attach toggle event listeners
+  document.querySelectorAll(".mcp-server-toggle").forEach(btn => {
+    btn.onclick = () => toggleMcpServer(btn.dataset.server, !JSON.parse(btn.getAttribute("aria-checked")));
+  });
+  document.querySelectorAll(".mcp-tool-checkbox").forEach(cb => {
+    cb.onchange = () => toggleMcpTool(cb.dataset.server, cb.dataset.tool, cb.checked);
+  });
+}
+
+// MCP toggle functions
+async function toggleMcpServer(serverName, enabled) {
+  try {
+    const r = await fetch("/mcp/toggle", {method: "POST", headers: headers(true), body: JSON.stringify({server: serverName, enabled})});
+    if (!r.ok) throw new Error(`HTTP ${r.status}`);
+    toast("success", enabled ? "Server enabled" : "Server disabled", serverName);
+    loadMcp();
+  } catch (e) {
+    toast("error", "Toggle failed", e.message, 6000);
+    loadMcp();
+  }
+}
+
+async function toggleMcpTool(serverName, toolName, enabled) {
+  try {
+    const r = await fetch("/mcp/toggle", {method: "POST", headers: headers(true), body: JSON.stringify({server: serverName, tool: toolName, enabled})});
+    if (!r.ok) throw new Error(`HTTP ${r.status}`);
+    toast("success", enabled ? "Tool enabled" : "Tool disabled", `${serverName}: ${toolName}`);
+  } catch (e) {
+    toast("error", "Toggle failed", e.message, 6000);
+    loadMcp();
+  }
 }
 
 // ------------------------------------------------------------------ Model settings (GET / POST /config, #564)
@@ -1286,7 +1364,47 @@ function loadDrawer(s = settings) {
   $("esp-row").hidden = !projectionLoaded();
   $("s-mcp").setAttribute("aria-checked", String(s.mcp !== false));
   $("s-share").setAttribute("aria-checked", String(sharedOn));
+  renderMcpToolsTree();
   outputs();
+}
+
+function renderMcpToolsTree() {
+  const servers = mcpInfo.servers || [];
+  const tree = $("mcp-tools-tree");
+  if (!servers.length) {
+    tree.innerHTML = '<p class="muted small">No MCP servers configured. Add them in the run config.</p>';
+    $("mcp-tools-field").hidden = true;
+    return;
+  }
+  $("mcp-tools-field").hidden = false;
+  tree.innerHTML = servers.map((s) => {
+    const serverEnabled = s.enabled !== false;
+    const toolsHtml = s.tools.length ? s.tools.map((t) => `
+      <label class="mcp-tool-toggle-drawer" title="${esc(t.description || '')}">
+        <input type="checkbox" class="mcp-tool-checkbox" data-server="${esc(s.name)}" data-tool="${esc(t.tool)}" ${t.enabled !== false ? "checked" : ""}>
+        <span class="tool-name">${esc(t.tool)}</span>
+      </label>
+    `).join("") : '<span class="muted small">No tools</span>';
+    return `
+      <details class="mcp-server-drawer" open>
+        <summary>
+          <label class="toggle-row" style="margin:0;cursor:pointer;">
+            <strong>${esc(s.name)}</strong> <span class="muted small">(${esc(s.transport)}, ${fmt(s.tools.length)} tools)</span>
+            <button class="st-toggle mcp-server-toggle" data-server="${esc(s.name)}" role="switch" aria-checked="${serverEnabled}" aria-label="Toggle server"></button>
+          </label>
+        </summary>
+        <div class="mcp-server-tools">${toolsHtml}</div>
+      </details>
+    `;
+  }).join("");
+
+  // Attach event listeners
+  tree.querySelectorAll(".mcp-server-toggle").forEach(btn => {
+    btn.onclick = () => toggleMcpServer(btn.dataset.server, !JSON.parse(btn.getAttribute("aria-checked")));
+  });
+  tree.querySelectorAll(".mcp-tool-checkbox").forEach(cb => {
+    cb.onchange = () => toggleMcpTool(cb.dataset.server, cb.dataset.tool, cb.checked);
+  });
 }
 // "Use for other apps too": the server keeps these settings as every client's defaults (GET/POST /settings)
 let sharedOn = false;

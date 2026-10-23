@@ -1,5 +1,6 @@
 /* Strata UI — tokens. Derived from the Gainsty design system.
    Light is default; dark via <html data-theme="dark">.
+   Glassmorphism via <html data-theme="glass-light"> / <html data-theme="glass-dark">.
    Values marked (derived) are not in the Gainsty source and were added for the app. */
 
 /* Outfit (SIL Open Font License 1.1, serve/web/fonts/OFL.txt): one variable font, weights 100-900 */
@@ -85,5 +86,69 @@
   --st-sh-bar:0 12px 32px rgba(0,0,0,.45),0 2px 6px rgba(0,0,0,.35);
   --st-sh-pop:0 16px 48px rgba(0,0,0,.55),0 1px 3px rgba(0,0,0,.4);
   --st-scrim:rgba(0,0,0,.5);
+  color-scheme:dark;
+}
+
+/* Glassmorphism Light — frosted glass, light backdrop */
+[data-theme="glass-light"]{
+  --st-bg:linear-gradient(135deg, #f5f7fa 0%, #e4e8f0 100%);
+  --st-surface:rgba(255,255,255,0.7);
+  --st-surface-2:rgba(255,255,255,0.5);
+  --st-line:rgba(255,255,255,0.3);
+  --st-line-soft:rgba(255,255,255,0.2);
+  --st-ink:#1a1a2e;
+  --st-ink-soft:#2d2d44;
+  --st-ink-muted:#5a5a7a;
+  --st-icon:#2d2d44;
+
+  --st-accent:#059669;
+  --st-accent-hover:#047857;
+  --st-accent-ink:#ffffff;
+  --st-accent-tint:rgba(5,150,105,.15);
+  --st-accent-text:#047857;
+  --st-focus:#3b82f6;
+
+  --st-info:#2563eb;     --st-info-tint:rgba(37,99,235,.15);    --st-info-text:#1d4ed8;
+  --st-warn:#d97706;     --st-warn-tint:rgba(217,119,6,.15);    --st-warn-text:#b45309;
+  --st-danger:#dc2626;   --st-danger-tint:rgba(220,38,38,.15);  --st-danger-text:#b91c1c;
+
+  --st-code-bg:#1b1f23;  --st-code-ink:#e6e9ec;
+
+  --st-sh-card:0 8px 32px rgba(0,0,0,.08),0 2px 8px rgba(0,0,0,.04);
+  --st-sh-bar:0 16px 40px rgba(0,0,0,.1),0 4px 12px rgba(0,0,0,.06);
+  --st-sh-pop:0 20px 60px rgba(0,0,0,.12),0 4px 16px rgba(0,0,0,.08);
+  --st-scrim:rgba(0,0,0,.15);
+  color-scheme:light;
+}
+
+/* Glassmorphism Dark — dark glass, dark backdrop */
+[data-theme="glass-dark"]{
+  --st-bg:linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
+  --st-surface:rgba(15,23,42,0.8);
+  --st-surface-2:rgba(15,23,42,0.6);
+  --st-line:rgba(148,163,184,0.2);
+  --st-line-soft:rgba(148,163,184,0.1);
+  --st-ink:#f1f5f9;
+  --st-ink-soft:#cbd5e1;
+  --st-ink-muted:#94a3b8;
+  --st-icon:#cbd5e1;
+
+  --st-accent:#34d399;
+  --st-accent-hover:#4ade80;
+  --st-accent-ink:#052e20;
+  --st-accent-tint:rgba(52,211,153,.2);
+  --st-accent-text:#4ade80;
+  --st-focus:#60a5fa;
+
+  --st-info:#3b82f6;     --st-info-tint:rgba(59,130,246,.15);  --st-info-text:#60a5fa;
+  --st-warn:#fbbf24;     --st-warn-tint:rgba(251,191,36,.15);  --st-warn-text:#fcd34d;
+  --st-danger:#f87171;   --st-danger-tint:rgba(248,113,113,.15);--st-danger-text:#fca5a5;
+
+  --st-code-bg:#0a0c0e;  --st-code-ink:#e6e9ec;
+
+  --st-sh-card:0 8px 32px rgba(0,0,0,.4),0 2px 8px rgba(0,0,0,.2);
+  --st-sh-bar:0 16px 40px rgba(0,0,0,.5),0 4px 12px rgba(0,0,0,.3);
+  --st-sh-pop:0 20px 60px rgba(0,0,0,.6),0 4px 16px rgba(0,0,0,.4);
+  --st-scrim:rgba(0,0,0,.6);
   color-scheme:dark;
 }

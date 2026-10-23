@@ -253,3 +253,46 @@ main { flex: 1; min-height: 0; display: flex; }
 .client-panel { animation: fade-in 120ms var(--st-ease); }
 @keyframes fade-in { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
 .client-panel .st-code { margin: 0; }
+
+/* Theme selector dropdown */
+.theme-selector { position: relative; }
+.theme-trigger { width: 36px; height: 36px; padding: 0; border-radius: 10px; background: transparent; color: var(--st-ink-muted); }
+.theme-trigger:hover { background: var(--st-surface-2); color: var(--st-ink); }
+.theme-dropdown { position: absolute; top: calc(100% + 8px); right: 0; min-width: 160px; padding: var(--st-s-2); background: var(--st-surface); border: 1px solid var(--st-line); border-radius: var(--st-r-md); box-shadow: var(--st-sh-pop); list-style: none; z-index: 10; }
+.theme-dropdown[hidden] { display: none; }
+.theme-dropdown li { display: flex; align-items: center; gap: var(--st-s-2); padding: var(--st-s-2) var(--st-s-3); border-radius: var(--st-r-sm); cursor: pointer; color: var(--st-ink); font: 500 var(--st-fs-sm) var(--st-font); }
+.theme-dropdown li:hover { background: var(--st-surface-2); }
+.theme-dropdown li[aria-selected="true"] { color: var(--st-accent); background: var(--st-accent-tint); }
+.theme-dropdown .st-icon--sm { flex: none; }
+
+/* MCP tool toggles in Monitor tab */
+.mcp-tool-toggle { display: flex; align-items: center; gap: 6px; padding: 4px 8px; border-radius: var(--st-r-sm); cursor: pointer; transition: background var(--st-dur); }
+.mcp-tool-toggle:hover { background: var(--st-surface-2); }
+.mcp-tool-checkbox { width: 16px; height: 16px; accent-color: var(--st-accent); cursor: pointer; }
+.mcp-tool-toggle-drawer { display: flex; align-items: center; gap: 8px; padding: var(--st-s-1) var(--st-s-2); border-radius: var(--st-r-sm); cursor: pointer; transition: background var(--st-dur); }
+.mcp-tool-toggle-drawer:hover { background: var(--st-surface-2); }
+
+/* MCP server drawer in Sampling */
+.mcp-server-drawer { margin-bottom: var(--st-s-2); border: 1px solid var(--st-line); border-radius: var(--st-r-md); background: var(--st-surface-2); }
+.mcp-server-drawer summary { padding: var(--st-s-2) var(--st-s-3); cursor: pointer; }
+.mcp-server-drawer summary .toggle-row { margin: 0; }
+.mcp-server-tools { padding: 0 var(--st-s-3) var(--st-s-3); display: flex; flex-wrap: wrap; gap: var(--st-s-1); }
+
+/* Glassmorphism backdrop for glass themes */
+[data-theme="glass-light"] .st-header,
+[data-theme="glass-light"] .st-card,
+[data-theme="glass-light"] .st-composer,
+[data-theme="glass-light"] .st-drawer,
+[data-theme="glass-dark"] .st-header,
+[data-theme="glass-dark"] .st-card,
+[data-theme="glass-dark"] .st-composer,
+[data-theme="glass-dark"] .st-drawer {
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+}
+
+/* Glassmorphism background for body */
+[data-theme="glass-light"] body,
+[data-theme="glass-dark"] body {
+  background-attachment: fixed;
+}

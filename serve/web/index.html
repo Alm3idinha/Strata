@@ -45,8 +45,17 @@
       <span class="st-status__text">Tools</span>
     </span>
   </div>
-  <button class="st-btn st-btn--icon" id="theme-btn" title="Light / dark" aria-label="Switch between light and dark">
-    <svg class="st-icon"><use id="theme-icon" href="web/sprite.svg#i-moon"/></svg></button>
+  <div class="theme-selector" id="theme-selector">
+    <button class="st-btn st-btn--icon theme-trigger" id="theme-trigger" aria-expanded="false" aria-haspopup="listbox" aria-label="Select theme">
+      <svg class="st-icon"><use id="theme-icon" href="web/sprite.svg#i-moon"/></svg>
+    </button>
+    <ul class="theme-dropdown" id="theme-dropdown" role="listbox" hidden>
+      <li role="option" data-theme="light" aria-selected="true"><svg class="st-icon st-icon--sm"><use href="web/sprite.svg#i-sun"/></svg>Light</li>
+      <li role="option" data-theme="dark" aria-selected="false"><svg class="st-icon st-icon--sm"><use href="web/sprite.svg#i-moon"/></svg>Dark</li>
+      <li role="option" data-theme="glass-light" aria-selected="false"><svg class="st-icon st-icon--sm"><use href="web/sprite.svg#i-layers"/></svg>Glass Light</li>
+      <li role="option" data-theme="glass-dark" aria-selected="false"><svg class="st-icon st-icon--sm"><use href="web/sprite.svg#i-layers"/></svg>Glass Dark</li>
+    </ul>
+  </div>
 </header>
 
 <main>
@@ -272,6 +281,11 @@
     <div class="toggle-row" id="mcp-row" hidden><span>Use tools from MCP servers<br><span class="muted small"
       id="mcp-row-sub">the model may call them while it answers</span></span>
       <button class="st-toggle" id="s-mcp" role="switch" aria-checked="true" aria-label="Use tools from MCP servers"></button></div>
+    <div class="st-field" id="mcp-tools-field" hidden>
+      <label class="st-label">MCP Tools (per-server)</label>
+      <div class="mcp-tools-tree" id="mcp-tools-tree"></div>
+      <p class="muted small">Changes take effect on the next chat request.</p>
+    </div>
     <div class="toggle-row" id="esp-row" hidden><span>Experimental speed projection<br><span class="muted small">the
       engine's control vector; off = the stock model. Switching reads the chat again once</span></span>
       <button class="st-toggle" id="s-esp" role="switch" aria-checked="true" aria-label="Experimental speed projection"></button></div>
