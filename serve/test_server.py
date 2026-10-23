@@ -912,6 +912,25 @@ class ConfigApiKey(unittest.TestCase):
         code, key, err = self.run_main({"api_monitor": True, "api_key": "secret"})
         self.assertEqual((code, key), (0, "secret"))
 
+    def test_before_load_without_ack_is_a_stop(self):
+        code, key, err = self.run_main({"before_load": "echo test", "api_key": "secret"})
+        self.assertEqual((code, key), (2, None))
+        self.assertIn("before_load can execute arbitrary commands", err)
+        self.assertIn("before_load_acknowledge_risk", err)
+
+    def test_before_load_with_ack_passes(self):
+        code, key, err = self.run_main({"before_load": "echo test",
+                                        "before_load_acknowledge_risk": True,
+                                        "api_key": "secret"})
+        self.assertEqual((code, key), (0, "secret"))
+
+    def test_before_load_with_false_ack_is_a_stop(self):
+        code, key, err = self.run_main({"before_load": "echo test",
+                                        "before_load_acknowledge_risk": False,
+                                        "api_key": "secret"})
+        self.assertEqual((code, key), (2, None))
+        self.assertIn("before_load can execute arbitrary commands", err)
+
 
 class ApiKeyForms(unittest.TestCase):
     """#725: a key no client could send (spaces or a line end around it), and a key outside ASCII."""

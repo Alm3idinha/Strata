@@ -1,4 +1,0 @@
-﻿{
-    "before_load_acknowledge_risk":  false,
-    "before_load":  "echo \u0027test\u0027"
-}

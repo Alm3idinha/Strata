@@ -191,7 +191,7 @@ class Monitor(unittest.TestCase):
         self.assertEqual(code, 200)
         self.assertIn("textContent", script)
         self.assertNotIn("innerHTML", script)
-        self.assertEqual(self.request("/web/../server.py")[0], 404)
+        self.assertEqual(self.request("/web/../server.py")[0], 400)
 
 
 class ConversationCacheCard(unittest.TestCase):
