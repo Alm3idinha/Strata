@@ -34,7 +34,7 @@
   --st-line-soft:#eeeeee;
   --st-ink:#221e1f;
   --st-ink-soft:#303030;
-  --st-ink-muted:#6f6f6f;        /* Gainsty #7a7a7a darkened slightly for 4.5:1 on white */
+  --st-ink-muted:#555;        /* darkened for WCAG AA (4.5:1 on white) */
   --st-icon:#2F384C;             /* Anron default */
 
   --st-accent:#10b981;
@@ -92,13 +92,13 @@
 /* Glassmorphism Light — frosted glass, light backdrop */
 [data-theme="glass-light"]{
   --st-bg:linear-gradient(135deg, #f5f7fa 0%, #e4e8f0 100%);
-  --st-surface:rgba(255,255,255,0.7);
-  --st-surface-2:rgba(255,255,255,0.5);
-  --st-line:rgba(255,255,255,0.3);
-  --st-line-soft:rgba(255,255,255,0.2);
+  --st-surface:rgba(255,255,255,0.75);
+  --st-surface-2:rgba(255,255,255,0.55);
+  --st-line:rgba(255,255,255,0.5);
+  --st-line-soft:rgba(255,255,255,0.35);
   --st-ink:#1a1a2e;
   --st-ink-soft:#2d2d44;
-  --st-ink-muted:#5a5a7a;
+  --st-ink-muted:#4a4a6a;        /* darkened for WCAG AA on glass */
   --st-icon:#2d2d44;
 
   --st-accent:#059669;
@@ -124,13 +124,13 @@
 /* Glassmorphism Dark — dark glass, dark backdrop */
 [data-theme="glass-dark"]{
   --st-bg:linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
-  --st-surface:rgba(15,23,42,0.8);
-  --st-surface-2:rgba(15,23,42,0.6);
-  --st-line:rgba(148,163,184,0.2);
-  --st-line-soft:rgba(148,163,184,0.1);
+  --st-surface:rgba(15,23,42,0.85);
+  --st-surface-2:rgba(15,23,42,0.65);
+  --st-line:rgba(148,163,184,0.35);
+  --st-line-soft:rgba(148,163,184,0.2);
   --st-ink:#f1f5f9;
   --st-ink-soft:#cbd5e1;
-  --st-ink-muted:#94a3b8;
+  --st-ink-muted:#a8b2bc;        /* lightened for WCAG AA on dark glass */
   --st-icon:#cbd5e1;
 
   --st-accent:#34d399;

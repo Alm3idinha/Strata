@@ -150,6 +150,7 @@ main { flex: 1; min-height: 0; display: flex; }
 .ctx-gauge { position: relative; width: 150px; height: 150px; margin: var(--st-s-2) auto var(--st-s-3); }
 .ctx-gauge .st-gauge { width: 150px; height: 150px; }
 .ctx-gauge .st-gauge__fill { transition: stroke-dasharray 400ms var(--st-ease); }
+.ctx-gauge .st-gauge__fill--faint { opacity: 0; }
 .ctx-gauge__label { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center;
                     font-size: var(--st-fs-xs); }
 .ctx-gauge__pct { font-weight: var(--st-fw-black); font-size: var(--st-fs-xl); line-height: 1.1; font-variant-numeric: tabular-nums; }
@@ -284,6 +285,30 @@ main { flex: 1; min-height: 0; display: flex; }
 
 /* Status dropdown containers */
 .st-status-container { position: relative; display: inline-block; }
+
+/* Status dropdown menus */
+.status-dropdown {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  min-width: 220px;
+  max-width: 360px;
+  padding: var(--st-s-2);
+  background: var(--st-surface);
+  border: 1px solid var(--st-line);
+  border-radius: var(--st-r-md);
+  box-shadow: var(--st-sh-pop);
+  list-style: none;
+  z-index: 20;
+}
+.status-dropdown[hidden] { display: none; }
+.status-dropdown__item { padding: var(--st-s-2); border-radius: var(--st-r-sm); }
+.status-dropdown__item:not(:last-child) { border-bottom: 1px solid var(--st-line-soft); }
+.status-dropdown__tools { list-style: none; margin: var(--st-s-2) 0 0; padding: 0 0 0 var(--st-s-4); }
+.status-dropdown__tools li { padding: 2px 0; font-size: var(--st-fs-xs); }
+.status-dropdown__item .mcp-tool-toggle { width: 100%; }
+.status-dropdown__item .mcp-tool-toggle input[type="checkbox"] { width: 14px; height: 14px; accent-color: var(--st-accent); }
+.status-dropdown__item .toggle-row { align-items: center; }
 
 /* Glassmorphism backdrop for glass themes */
 [data-theme="glass-light"] .st-header,

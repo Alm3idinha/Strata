@@ -88,6 +88,115 @@ document.addEventListener("click", () => {
   themeDropdown.hidden = true;
 });
 
+// Status badge dropdowns (MCP, Vision, Tools)
+function toggleStatusDropdown(statusId, dropdownId) {
+  const status = $(statusId);
+  const dropdown = $(dropdownId);
+  const expanded = status.getAttribute("aria-expanded") === "true";
+  status.setAttribute("aria-expanded", String(!expanded));
+  dropdown.hidden = expanded;
+}
+
+function closeAllStatusDropdowns() {
+  ["status-mcp", "status-vision", "status-builtin"].forEach(id => {
+    const s = $(id), d = $(`${id}-dropdown`);
+    if (s) { s.setAttribute("aria-expanded", "false"); }
+    if (d) { d.hidden = true; }
+  });
+}
+
+$("status-mcp").onclick = (e) => { e.stopPropagation(); toggleStatusDropdown("status-mcp", "status-mcp-dropdown"); populateMcpDropdown(); };
+$("status-vision").onclick = (e) => { e.stopPropagation(); toggleStatusDropdown("status-vision", "status-vision-dropdown"); populateVisionDropdown(); };
+$("status-builtin").onclick = (e) => { e.stopPropagation(); toggleStatusDropdown("status-builtin", "status-builtin-dropdown"); populateBuiltinDropdown(); };
+
+document.addEventListener("click", closeAllStatusDropdowns);
+
+function populateMcpDropdown() {
+  const dropdown = $("status-mcp-dropdown");
+  if (!dropdown) return;
+  const servers = (mcpInfo && mcpInfo.servers) || [];
+  if (!servers.length) {
+    dropdown.innerHTML = '<li class="status-dropdown__item muted small">No MCP servers configured</li>';
+    return;
+  }
+  dropdown.innerHTML = servers.map(s => {
+    const serverEnabled = s.enabled !== false;
+    const toolCount = s.tools ? s.tools.length : 0;
+    const readyTools = s.tools ? s.tools.filter(t => t.enabled !== false).length : 0;
+    return `
+      <li class="status-dropdown__item">
+        <label class="toggle-row mcp-server-toggle-label">
+          <strong>${esc(s.name)}</strong>
+          <span class="muted small">(${esc(s.transport)}, ${readyTools}/${toolCount} tools)</span>
+          <button class="st-toggle mcp-server-toggle" data-server="${esc(s.name)}" role="switch" aria-checked="${serverEnabled}" aria-label="Toggle server"></button>
+        </label>
+        ${s.tools && s.tools.length ? `
+          <ul class="status-dropdown__tools">
+            ${s.tools.map(t => `
+              <li>
+                <label class="mcp-tool-toggle" title="${esc(t.description || "")}">
+                  <input type="checkbox" class="mcp-tool-checkbox" data-server="${esc(s.name)}" data-tool="${esc(t.tool)}" ${t.enabled !== false ? "checked" : ""}>
+                  <span class="tool-name">${esc(t.tool)}</span>
+                </label>
+              </li>
+            `).join("")}
+          </ul>
+        ` : ""}
+      </li>
+    `;
+  }).join("");
+
+  dropdown.querySelectorAll(".mcp-server-toggle").forEach(btn => {
+    btn.onclick = () => toggleMcpServer(btn.dataset.server, !JSON.parse(btn.getAttribute("aria-checked")));
+  });
+  dropdown.querySelectorAll(".mcp-tool-checkbox").forEach(cb => {
+    cb.onchange = () => toggleMcpTool(cb.dataset.server, cb.dataset.tool, cb.checked);
+  });
+}
+
+function populateVisionDropdown() {
+  const dropdown = $("status-vision-dropdown");
+  if (!dropdown) return;
+  const enabled = health && health.images;
+  dropdown.innerHTML = `
+    <li class="status-dropdown__item">
+      <label class="toggle-row">
+        <span>Vision model</span>
+        <span class="muted small">${enabled ? "Available" : "Not available (text-only)"}</span>
+        ${enabled ? "" : `<span class="st-badge st-badge--disabled">Disabled</span>`}
+      </label>
+    </li>
+    <li class="status-dropdown__item muted small">
+      ${enabled ? "Upload images in chat or attach via your API client." : "Enable \"Images?\" in setup to use vision."}
+    </li>
+  `;
+}
+
+function populateBuiltinDropdown() {
+  const dropdown = $("status-builtin-dropdown");
+  if (!dropdown) return;
+  const bt = health && health.builtin_tools;
+  if (!bt || !bt.enabled) {
+    dropdown.innerHTML = '<li class="status-dropdown__item muted small">Built-in tools disabled</li>';
+    return;
+  }
+  dropdown.innerHTML = `
+    <li class="status-dropdown__item">
+      <label class="toggle-row">
+        <span>Built-in tools</span>
+        <span class="st-badge st-badge--ready">${bt.count} tool(s)</span>
+      </label>
+    </li>
+    ${bt.tools && bt.tools.length ? `
+      <li class="status-dropdown__item">
+        <ul class="status-dropdown__tools">
+          ${bt.tools.map(t => `<li class="muted small">${esc(t)}</li>`).join("")}
+        </ul>
+      </li>
+    ` : ""}
+  `;
+}
+
 // Initialize theme from localStorage or system preference
 try {
   const saved = localStorage.getItem("strata.theme");
@@ -398,7 +507,7 @@ function renderMonitor(live, hw, st, eng, h, last, requests, totals, kept) {
   else if (last) used = (last.prompt_tokens || 0) + (last.output_tokens || 0);
   const frac = ctx ? Math.min(1, used / ctx) : 0;
   $("ctx-fill").setAttribute("stroke-dasharray", `${(235.6 * frac).toFixed(1)} 314.2`);
-  $("ctx-fill").style.opacity = 235.6 * frac >= 3 ? "1" : "0";         // a near-zero arc would draw just its round cap
+  $("ctx-fill").classList.toggle("st-gauge__fill--faint", 235.6 * frac < 3);         // a near-zero arc would draw just its round cap
   $("ctx-pct").textContent = `${Math.round(frac * 100)}%`;
   $("ctx-sub").textContent = ctx ? `${kfmt(used)} / ${ctxfmt(ctx)}` : "–";
   const cacheBytes = (eng.expert_cache_mib || 0) * 1048576;
