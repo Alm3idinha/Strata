@@ -36,7 +36,7 @@ a{color:var(--st-accent-text);text-decoration:none} a:hover{text-decoration:unde
 
 /* progress + gauge */
 .st-progress{height:8px;border-radius:var(--st-r-pill);background:var(--st-surface-2);border:1px solid var(--st-line-soft);overflow:hidden}
-.st-progress__bar{height:100%;border-radius:inherit;background:var(--st-accent);transition:width var(--st-dur) var(--st-ease)}
+.st-progress__bar{height:100%;border-radius:inherit;background:var(--st-accent);width:var(--progress,0%);transition:width var(--st-dur) var(--st-ease)}
 .st-progress[data-tone="info"] .st-progress__bar{background:var(--st-info)}
 .st-progress[data-tone="warn"] .st-progress__bar{background:var(--st-warn)}
 .st-progress[data-tone="danger"] .st-progress__bar{background:var(--st-danger)}

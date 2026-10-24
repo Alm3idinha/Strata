@@ -31,6 +31,16 @@ exit /b 1
 :venv
 rem a private environment inside this folder, so nothing is installed into the system Python
 %PY% -m venv .venv
+rem Ensure pip exists in the venv (Python 3.14+ may not install it by default)
+if not exist ".venv\Scripts\pip.exe" (
+    echo  Installing pip in the virtual environment...
+    .venv\Scripts\python.exe -m ensurepip --upgrade 2>nul
+    if not exist ".venv\Scripts\pip.exe" (
+        echo  Falling back to get-pip.py...
+        curl -sSL https://bootstrap.pypa.io/get-pip.py -o "%TEMP%\get-pip.py"
+        .venv\Scripts\python.exe "%TEMP%\get-pip.py"
+    )
+)
 if exist ".venv\Scripts\python.exe" goto run
 echo  Could not create the Python environment in .venv
 pause
@@ -39,7 +49,7 @@ exit /b 1
 :run
 ".venv\Scripts\python.exe" setup.py %*
 if errorlevel 1 pause
-exit /b
+exit /b 1
 
 :findpy
 rem the py launcher first, then python on PATH (not the Microsoft Store stub), then the usual per-user folders

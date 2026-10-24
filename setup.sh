@@ -11,6 +11,17 @@ ok_py() { "$1" -c 'import sys, venv, ensurepip; sys.exit(0 if sys.version_info >
 if [ -x .venv/bin/python ] && ! .venv/bin/python -m pip --version >/dev/null 2>&1; then
   rm -rf .venv
 fi
+
+ensure_pip() {
+  local py="$1"
+  if ! "$py" -m ensurepip --upgrade >/dev/null 2>&1; then
+    echo "  [ensurepip failed] Falling back to get-pip.py..."
+    curl -sSL https://bootstrap.pypa.io/get-pip.py -o /tmp/get-pip.py
+    "$py" /tmp/get-pip.py
+    rm -f /tmp/get-pip.py
+  fi
+}
+
 if [ ! -x .venv/bin/python ]; then
   # uv's own Python only on NixOS (its Python cannot load pip wheels' libraries), or when asked: STRATA_UV=1.
   # Everywhere else the standard venv stays the default (#662: a silent toolchain change was not wanted).
@@ -51,6 +62,11 @@ if [ ! -x .venv/bin/python ]; then
   else
     # a private environment inside this folder (system Python stays untouched; newer distros refuse global pip)
     $PY -m venv .venv || { rm -rf .venv; echo "could not create .venv: sudo apt install python3-venv"; exit 1; }
+    # Ensure pip is present (Python 3.14+ venv may not include it)
+    if ! .venv/bin/python -m pip --version >/dev/null 2>&1; then
+      echo "  Installing pip in the virtual environment..."
+      ensure_pip .venv/bin/python
+    fi
   fi
 fi
 exec .venv/bin/python setup.py "$@"

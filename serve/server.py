@@ -4663,7 +4663,7 @@ def make_handler(svc: Service):
             self.send_header("Referrer-Policy", "strict-origin-when-cross-origin")
             self.send_header(
                 "Content-Security-Policy",
-                "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self'; font-src 'self'; connect-src 'self';"
+                "default-src 'self'; script-src 'self'; style-src 'self'; style-src-attr 'unsafe-inline'; img-src 'self'; font-src 'self'; connect-src 'self';"
             )
             super().end_headers()
 

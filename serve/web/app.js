@@ -27,9 +27,7 @@ function toast(kind, title, text = "", ms = 3500, action = null) {
   el.querySelector(".t-text").textContent = text;
   if (action) {
     const b = document.createElement("button");
-    b.className = "st-btn st-btn--secondary";
-    b.style.height = "32px";
-    b.style.marginLeft = "auto";
+    b.className = "st-btn st-btn--secondary st-toast-action-btn";
     b.textContent = action.label;
     b.onclick = () => { action.run(); el.remove(); };
     el.appendChild(b);
@@ -71,7 +69,7 @@ function setTheme(t, save) {
 
 // Theme dropdown toggle
 const themeTrigger = $("theme-trigger");
-const themeDropdown = $("#theme-dropdown");
+const themeDropdown = $("theme-dropdown");
 themeTrigger.onclick = (e) => {
   e.stopPropagation();
   const expanded = themeTrigger.getAttribute("aria-expanded") === "true";
@@ -296,10 +294,10 @@ function renderConvCache(c) {
   $("cc-bars").hidden = !c.enabled;
   if (c.enabled) {
     $("cc-slots-text").textContent = `${fmt(c.parked)} / ${fmt(c.slots)}`;
-    $("cc-slots-bar").style.width = pct(c.parked, c.slots);
+    $("cc-slots-bar").style.setProperty("--progress", pct(c.parked, c.slots));
     const budget = c.budget_mib * 1048576;
     $("cc-mem-text").textContent = `${gb(c.bytes)} / ${gb(budget)} GB`;
-    $("cc-mem-bar").style.width = pct(c.bytes, budget);
+    $("cc-mem-bar").style.setProperty("--progress", pct(c.bytes, budget));
   }
   $("cc-sum").textContent = c.requests ? `${fmt(c.requests_reused)} of ${fmt(c.requests)} requests reused part of their prompt` : "";
   const share = c.prompt_tokens ? ` (${fmt((100 * c.reused_tokens) / c.prompt_tokens)}% of all prompt tokens)` : "";
@@ -350,7 +348,7 @@ function renderMonitor(live, hw, st, eng, h, last, requests, totals, kept) {
   }
   $("state-label").textContent = label;
   $("state-detail").textContent = detail;
-  $("state-bar").style.width = `${pct}%`;
+  $("state-bar").style.setProperty("--progress", `${pct}%`);
 
   // the eight cards
   const speed = live.state === "generating" ? live.tok_s : last ? last.decode_tok_s : null;
@@ -405,13 +403,13 @@ function renderMonitor(live, hw, st, eng, h, last, requests, totals, kept) {
   $("ctx-sub").textContent = ctx ? `${kfmt(used)} / ${ctxfmt(ctx)}` : "–";
   const cacheBytes = (eng.expert_cache_mib || 0) * 1048576;
   $("slots-text").textContent = eng.expert_slots ? `${fmt(eng.expert_slots)} · ${gb(cacheBytes)} GB` : "–";
-  $("slots-bar").style.width = hw.gpu_mem_total ? `${Math.min(100, (100 * cacheBytes) / hw.gpu_mem_total)}%` : "0%";
+  $("slots-bar").style.setProperty("--progress", hw.gpu_mem_total ? `${Math.min(100, (100 * cacheBytes) / hw.gpu_mem_total)}%` : "0%");
   $("ram-text").textContent = hw.ram_total ? `${gb(hw.ram_used)} / ${gb(hw.ram_total, 0)} GB` : "–";
   const ramPct = hw.ram_total ? (100 * hw.ram_used) / hw.ram_total : 0;
-  $("ram-bar").style.width = `${ramPct}%`;
+  $("ram-bar").style.setProperty("--progress", `${ramPct}%`);
   if (ramPct > 92) $("ram-progress").dataset.tone = "danger"; else delete $("ram-progress").dataset.tone;
   $("temp-text").textContent = hw.gpu_temp == null ? "–" : `${fmt(hw.gpu_temp)} °C`;
-  $("temp-bar").style.width = hw.gpu_temp == null ? "0%" : `${Math.min(100, hw.gpu_temp)}%`;
+  $("temp-bar").style.setProperty("--progress", hw.gpu_temp == null ? "0%" : `${Math.min(100, hw.gpu_temp)}%`);
 
   // recent requests
   const body = $("req-body");
@@ -514,7 +512,7 @@ function renderMcp() {
     const [cls, text] = MCP_STATE[s.status] || ["", s.status];
     const info = s.info && s.info.name ? ` · ${s.info.name}${s.info.version ? ` ${s.info.version}` : ""}` : "";
     const serverEnabled = s.enabled !== false;
-    const serverToggle = `<label class="toggle-row" style="margin-left:auto;gap:8px;"><span class="muted small">${serverEnabled ? "Enabled" : "Disabled"}</span><button class="st-toggle mcp-server-toggle" data-server="${esc(s.name)}" role="switch" aria-checked="${serverEnabled}" aria-label="Toggle server"></button></label>`;
+    const serverToggle = `<label class="toggle-row mcp-server-toggle-label"><span class="muted small">${serverEnabled ? "Enabled" : "Disabled"}</span><button class="st-toggle mcp-server-toggle" data-server="${esc(s.name)}" role="switch" aria-checked="${serverEnabled}" aria-label="Toggle server"></button></label>`;
     return `<div class="mcp-server"><div class="mcp-server__head"><span class="st-badge ${cls}">${esc(text)}</span>` +
       `<strong>${esc(s.name)}</strong><span class="muted small">${esc(s.transport)} · ${fmt(s.tools.length)} tools${esc(info)}</span>` +
       serverToggle + `</div>` +
@@ -621,8 +619,7 @@ function renderApiEndpoints(c) {
   });
 
   const testBtn = document.createElement("button");
-  testBtn.className = "st-btn st-btn--secondary";
-  testBtn.style.marginTop = "var(--st-s-3)";
+  testBtn.className = "st-btn st-btn--secondary st-test-connection-btn";
   testBtn.textContent = "Test Connection";
   testBtn.onclick = async () => {
     testBtn.disabled = true;
@@ -1213,7 +1210,7 @@ $("stop-btn").onclick = () => { if (busy) busy.controller.abort(); };
 $("input").addEventListener("keydown", (e) => {
   if (e.key === "Enter" && !e.shiftKey && !e.isComposing) { e.preventDefault(); send(); }
 });
-function autosize() { const t = $("input"); t.style.height = "auto"; t.style.height = `${Math.min(t.scrollHeight, innerHeight * 0.4)}px`; }
+function autosize() { const t = $("input"); t.style.height = "auto"; t.style.setProperty("--h", `${Math.min(t.scrollHeight, innerHeight * 0.4)}px`); t.style.height = `var(--h)`; }
 $("input").addEventListener("input", autosize);
 
 $("new-btn").onclick = () => {
@@ -1294,15 +1291,13 @@ function renderAttachments() {
     c.append(a.name);
     if (a.truncated) {
       const t = document.createElement("span");
-      t.className = "muted";
-      t.style.marginLeft = "4px";
+      t.className = "muted chip-text-muted";
       t.textContent = " (truncated)";
       c.appendChild(t);
     }
     if (a.size) {
       const s = document.createElement("span");
-      s.className = "muted";
-      s.style.marginLeft = "4px";
+      s.className = "muted chip-text-muted";
       s.textContent = ` (${formatBytes(a.size)})`;
       c.appendChild(s);
     }
@@ -1385,17 +1380,17 @@ function renderMcpToolsTree() {
         <span class="tool-name">${esc(t.tool)}</span>
       </label>
     `).join("") : '<span class="muted small">No tools</span>';
-    return `
+return `
       <details class="mcp-server-drawer" open>
         <summary>
-          <label class="toggle-row" style="margin:0;cursor:pointer;">
+          <label class="toggle-row mcp-server-summary">
             <strong>${esc(s.name)}</strong> <span class="muted small">(${esc(s.transport)}, ${fmt(s.tools.length)} tools)</span>
             <button class="st-toggle mcp-server-toggle" data-server="${esc(s.name)}" role="switch" aria-checked="${serverEnabled}" aria-label="Toggle server"></button>
           </label>
         </summary>
         <div class="mcp-server-tools">${toolsHtml}</div>
       </details>
-    `;
+      `;
   }).join("");
 
   // Attach event listeners

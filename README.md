@@ -144,6 +144,14 @@ Sizes, downloads and what fits where: [docs/MODELS.md](docs/MODELS.md). To add a
 
 - **In the browser:** open `http://127.0.0.1:8080`. It has **Chat**, a live **Monitor** of the model and your
   GPU/CPU/RAM, and **About** with the settings and addresses.
+  - **Four themes.** The button next to the tabs switches between **Light**, **Dark**, **Glass Light** and
+    **Glass Dark** (frosted glass). Your choice is kept in this browser; otherwise it follows your system.
+  - **Status badges.** Next to the theme button, MCP, Vision and Tools show what is on. Click one to open a
+    quick menu: which MCP servers are connected, what they offer, and whether the model may use them.
+  - **MCP tools.** In the Monitor tab and in the Sampling drawer you can switch whole MCP servers on or off, and
+    each tool individually. Changes take effect on the next request.
+  - **About tab.** The API addresses come with copy buttons and a **Test Connection** button, plus ready-to-paste
+    config snippets for LM Studio, VS Code, Cursor, Open WebUI and more.
 - **Your apps and coding agents:** add an "OpenAI-compatible" provider with the base URL
   **`http://127.0.0.1:8080/v1`**. Any API key and any model name work.
   - Apps that use Anthropic's API: `http://127.0.0.1:8080/v1/messages` (Claude Code:
@@ -152,6 +160,9 @@ Sizes, downloads and what fits where: [docs/MODELS.md](docs/MODELS.md). To add a
     ([setup](docs/DETAILS.md#the-responses-api-and-codex-cli)).
 - **Thinking:** choose **off, low, medium or high** in the chat menu or in your app's "reasoning effort". Off is the
   fastest. High is best for hard questions.
+  - **Tools from MCP servers.** If the run config lists MCP servers (see [docs/MCP_SERVER.md](docs/MCP_SERVER.md)),
+    the model can call their tools while it answers - in this page's chat only. Switch servers and individual tools
+    on or off in the Sampling drawer or the Monitor tab; off by default for the model, on for this page.
 - **Pictures:** say yes to "Images?" in setup. Then click **Picture** in the chat, or attach pictures in your app.
   AMD cards read pictures on Linux through the processor; on Windows they can't yet.
 - **From your phone or another PC:** `START-HERE.bat --setup --host 0.0.0.0 --api-key <secret>`. Always set a key.

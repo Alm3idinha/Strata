@@ -32,18 +32,33 @@
   <span class="st-pill" id="pill" data-state="idle" role="status" aria-live="polite">
     <span class="st-pill__dot"></span><span id="pill-text">Connecting&hellip;</span></span>
   <div class="st-status-group" id="status-group" aria-label="Capabilities">
-    <span class="st-status" id="status-mcp" data-state="unknown" title="MCP servers">
-      <svg class="st-icon"><use href="web/sprite.svg#i-activity"/></svg>
-      <span class="st-status__text">MCP</span>
-    </span>
-    <span class="st-status" id="status-vision" data-state="unknown" title="Vision">
-      <svg class="st-icon"><use href="web/sprite.svg#i-image"/></svg>
-      <span class="st-status__text">Vision</span>
-    </span>
-    <span class="st-status" id="status-builtin" data-state="unknown" title="Built-in tools">
-      <svg class="st-icon"><use href="web/sprite.svg#i-tool"/></svg>
-      <span class="st-status__text">Tools</span>
-    </span>
+    <div class="st-status-container">
+      <span class="st-status" id="status-mcp" data-state="unknown" title="MCP servers">
+        <svg class="st-icon"><use href="web/sprite.svg#i-activity"/></svg>
+        <span class="st-status__text">MCP</span>
+      </span>
+      <ul class="status-dropdown" id="status-mcp-dropdown" role="menu" hidden>
+        <li class="status-dropdown__item" data-type="mcp-server" id="mcp-server-item"></li>
+      </ul>
+    </div>
+    <div class="st-status-container">
+      <span class="st-status" id="status-vision" data-state="unknown" title="Vision">
+        <svg class="st-icon"><use href="web/sprite.svg#i-image"/></svg>
+        <span class="st-status__text">Vision</span>
+      </span>
+      <ul class="status-dropdown" id="status-vision-dropdown" role="menu" hidden>
+        <li class="status-dropdown__item" data-type="vision" id="vision-item"></li>
+      </ul>
+    </div>
+    <div class="st-status-container">
+      <span class="st-status" id="status-builtin" data-state="unknown" title="Built-in tools">
+        <svg class="st-icon"><use href="web/sprite.svg#i-tool"/></svg>
+        <span class="st-status__text">Tools</span>
+      </span>
+      <ul class="status-dropdown" id="status-builtin-dropdown" role="menu" hidden>
+        <li class="status-dropdown__item" data-type="builtin" id="builtin-item"></li>
+      </ul>
+    </div>
   </div>
   <div class="theme-selector" id="theme-selector">
     <button class="st-btn st-btn--icon theme-trigger" id="theme-trigger" aria-expanded="false" aria-haspopup="listbox" aria-label="Select theme">
@@ -109,7 +124,7 @@
           </span>
         </div>
         <div class="state-card__row"><span id="state-label">Waiting for a request</span><span class="muted" id="state-detail"></span></div>
-        <div class="st-progress" id="state-progress"><div class="st-progress__bar" id="state-bar" style="width:0%"></div></div>
+        <div class="st-progress" id="state-progress"><div class="st-progress__bar" id="state-bar"></div></div>
       </div>
 
       <div class="metrics" id="metrics">
@@ -129,11 +144,11 @@
             <div class="ctx-gauge__label"><span class="ctx-gauge__pct" id="ctx-pct">0%</span><span class="muted" id="ctx-sub">&ndash;</span></div>
           </div>
           <div class="bar-row"><span>Experts in VRAM</span><span class="muted" id="slots-text">&ndash;</span></div>
-          <div class="st-progress"><div class="st-progress__bar" id="slots-bar" style="width:0%"></div></div>
+          <div class="st-progress"><div class="st-progress__bar" id="slots-bar"></div></div>
           <div class="bar-row"><span>System RAM</span><span class="muted" id="ram-text">&ndash;</span></div>
-          <div class="st-progress" id="ram-progress"><div class="st-progress__bar" id="ram-bar" style="width:0%"></div></div>
+          <div class="st-progress" id="ram-progress"><div class="st-progress__bar" id="ram-bar"></div></div>
           <div class="bar-row"><span>GPU temperature</span><span class="muted" id="temp-text">&ndash;</span></div>
-          <div class="st-progress" data-tone="warn"><div class="st-progress__bar" id="temp-bar" style="width:0%"></div></div>
+          <div class="st-progress" data-tone="warn"><div class="st-progress__bar" id="temp-bar"></div></div>
         </div>
         <div class="st-card req-card">
           <div class="req-head"><span class="card-title">Recent requests</span>
@@ -153,9 +168,9 @@
         <div class="req-head"><span class="card-title">Conversation cache</span><span class="muted small" id="cc-sum"></span></div>
         <div class="cc-bars" id="cc-bars" hidden>
           <div><div class="bar-row"><span>Parked conversations</span><span class="muted" id="cc-slots-text">&ndash;</span></div>
-            <div class="st-progress"><div class="st-progress__bar" id="cc-slots-bar" style="width:0%"></div></div></div>
+            <div class="st-progress"><div class="st-progress__bar" id="cc-slots-bar"></div></div></div>
           <div><div class="bar-row"><span>Their memory (RAM)</span><span class="muted" id="cc-mem-text">&ndash;</span></div>
-            <div class="st-progress"><div class="st-progress__bar" id="cc-mem-bar" style="width:0%"></div></div></div>
+            <div class="st-progress"><div class="st-progress__bar" id="cc-mem-bar"></div></div></div>
         </div>
         <dl class="facts" id="cc-facts"></dl>
         <p class="muted small cc-note" id="cc-note"></p>

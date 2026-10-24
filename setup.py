@@ -50,6 +50,7 @@ import re
 import shutil
 import struct
 import subprocess
+import tempfile
 import sys
 import textwrap
 import time
@@ -1781,6 +1782,23 @@ def pip_install(packages, what):
     """pip install into .venv, skipped when the same list was installed before.  An install from before the pinned
     requirements (#214) recorded bare names: those packages are kept as they are (nothing is reinstalled), and the
     pinned dependencies it already has count as installed."""
+    # Ensure pip is available (Python 3.14+ venv may not include it)
+    try:
+        subprocess.run([sys.executable, "-m", "pip", "--version"],
+                       capture_output=True, check=True)
+    except subprocess.CalledProcessError:
+        say("  [pip missing] Installing pip in the virtual environment...")
+        try:
+            subprocess.run([sys.executable, "-m", "ensurepip", "--upgrade"],
+                           capture_output=True, check=True)
+        except subprocess.CalledProcessError:
+            say("  [ensurepip failed] Falling back to get-pip.py...")
+            get_pip_url = "https://bootstrap.pypa.io/get-pip.py"
+            get_pip_path = Path(tempfile.gettempdir()) / "get-pip.py"
+            urllib.request.urlretrieve(get_pip_url, get_pip_path)
+            subprocess.run([sys.executable, str(get_pip_path)], check=True)
+            get_pip_path.unlink(missing_ok=True)
+
     stamp = Path(sys.prefix) / ".strata-pip.json"
     have = json.loads(stamp.read_text(encoding="utf-8")) if stamp.exists() else []
     bare = {p.lower() for p in have if req_name(p) == p.lower()}

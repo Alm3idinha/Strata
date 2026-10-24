@@ -278,6 +278,13 @@ main { flex: 1; min-height: 0; display: flex; }
 .mcp-server-drawer summary .toggle-row { margin: 0; }
 .mcp-server-tools { padding: 0 var(--st-s-3) var(--st-s-3); display: flex; flex-wrap: wrap; gap: var(--st-s-1); }
 
+.mcp-server-toggle-label { margin-left: auto; gap: 8px; }
+.st-test-connection-btn { margin-top: var(--st-s-3); }
+.mcp-server-summary { margin: 0; cursor: pointer; }
+
+/* Status dropdown containers */
+.st-status-container { position: relative; display: inline-block; }
+
 /* Glassmorphism backdrop for glass themes */
 [data-theme="glass-light"] .st-header,
 [data-theme="glass-light"] .st-card,
