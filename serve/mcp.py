@@ -21,23 +21,107 @@ from __future__ import annotations
 import collections
 import base64
 import hashlib
+import ipaddress
 from pathlib import Path
 import json
 import os
 import re
 import shutil
 import signal
+import socket
 import subprocess
 import sys
 import threading
 import time
 import urllib.error
 import urllib.request
+from urllib.parse import urlsplit
 
 from serve import lifeline
 
 PROTOCOL = "2025-06-18"               # the MCP revision Strata asks for; the server's answer is used as given
 DEFAULTS = {"timeout_s": 60.0, "max_result_chars": 20000, "max_rounds": 8, "start_timeout_s": 120.0, "image_results": False}
+
+# SSRF protection for MCP HTTP transport: block private, loopback, link-local and reserved IP ranges
+# (OWASP Server-Side Request Forgery prevention)
+_MCP_BLOCKED_NETWORKS = [
+    ipaddress.ip_network("10.0.0.0/8"),          # private IPv4
+    ipaddress.ip_network("172.16.0.0/12"),       # private IPv4
+    ipaddress.ip_network("192.168.0.0/16"),      # private IPv4
+    ipaddress.ip_network("127.0.0.0/8"),         # loopback IPv4
+    ipaddress.ip_network("169.254.0.0/16"),      # link-local (incl. cloud metadata 169.254.169.254)
+    ipaddress.ip_network("100.64.0.0/10"),       # carrier-grade NAT
+    ipaddress.ip_network("0.0.0.0/8"),           # reserved
+    ipaddress.ip_network("224.0.0.0/4"),         # multicast
+    ipaddress.ip_network("240.0.0.0/4"),         # reserved
+    ipaddress.ip_network("::1/128"),             # IPv6 loopback
+    ipaddress.ip_network("fc00::/7"),            # IPv6 unique-local
+    ipaddress.ip_network("fe80::/10"),           # IPv6 link-local
+]
+
+
+def _mcp_is_blocked_ip(ip_str: str) -> bool:
+    """True when the IP is in a private, loopback, link-local, or otherwise reserved range."""
+    try:
+        ip = ipaddress.ip_address(ip_str)
+    except ValueError:
+        return True                                   # not a valid IP: refuse it
+    for net in _MCP_BLOCKED_NETWORKS:
+        if ip in net:
+            return True
+    return False
+
+
+def _mcp_resolve_host(host: str) -> list[str]:
+    """All IP addresses the host resolves to, via getaddrinfo.  Raises ValueError when every IP is blocked or unresolvable."""
+    try:
+        infos = socket.getaddrinfo(host, None, proto=socket.IPPROTO_TCP)
+    except socket.gaierror as e:
+        raise ValueError(f"MCP server host {host!r} could not be resolved: {e}") from None
+    ips = []
+    for family, _type, _proto, _canon, sockaddr in infos:
+        ip = sockaddr[0]
+        if family == socket.AF_INET6 and ip.startswith("::ffff:"):      # mapped IPv4
+            ip = ip[7:]
+        if ip not in ips:
+            ips.append(ip)
+    if not ips:
+        raise ValueError(f"MCP server host {host!r} resolved to no IP addresses")
+    return ips
+
+
+def _mcp_validate_url(url: str) -> None:
+    """Resolve the URL's host and check every IP against blocked ranges before anything is fetched."""
+    host = host_name(urlsplit(url).netloc) or ""
+    if not host:
+        raise ValueError("MCP server URL has no host")
+    ips = _mcp_resolve_host(host)
+    for ip in ips:
+        if _mcp_is_blocked_ip(ip):
+            print(f"[strata] MCP server URL blocked: {url} resolved to {ip} (a private/loopback/link-local address)",
+                  flush=True)
+            raise ValueError(f"MCP server URL {url} points at {ip}, which is not allowed (a private or loopback address)")
+
+
+def host_name(netloc: str) -> str:
+    """Extract and normalize the host from a netloc (host:port or [IPv6]:port)."""
+    if not netloc:
+        return ""
+    # Remove userinfo if present
+    if "@" in netloc:
+        netloc = netloc.split("@", 1)[1]
+    # Remove port
+    if netloc.startswith("["):          # IPv6 literal
+        end = netloc.find("]")
+        if end == -1:
+            return ""
+        host = netloc[1:end]
+    else:
+        host = netloc.split(":")[0]
+    # Remove trailing dot
+    if host.endswith("."):
+        host = host[:-1]
+    return host.lower()
 
 
 class McpError(RuntimeError):
@@ -265,7 +349,8 @@ class HttpTransport:
         self.broken = None
 
     def start(self):
-        pass
+        # SSRF protection: validate the URL before any request is made
+        _mcp_validate_url(self.url)
 
     def alive(self) -> bool:
         return self.broken is None

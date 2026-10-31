@@ -1,0 +1,103 @@
+name: Dependency Security Scan
+
+on:
+  schedule:
+    - cron: '0 6 * * 1'  # Weekly on Monday at 06:00 UTC
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'requirements*.txt'
+      - 'pyproject.toml'
+      - 'uv.lock'
+  pull_request:
+    paths:
+      - 'requirements*.txt'
+      - 'pyproject.toml'
+      - 'uv.lock'
+
+permissions:
+  contents: read
+  security-events: write
+  actions: read
+
+jobs:
+  security-audit:
+    name: Security Audit
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v4
+        with:
+          version: "latest"
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: "uv"
+
+      - name: Install dependencies
+        run: |
+          uv sync --all-extras
+          uv pip install pip-audit
+
+      - name: Run pip-audit
+        id: pip-audit
+        run: |
+          pip-audit --format=json --output=audit-report.json || true
+          pip-audit --format=text --desc || true
+
+      - name: Check for high/critical vulnerabilities
+        run: |
+          HIGH_CRITICAL=$(jq '[.vulnerabilities[] | select(.fix_versions[]? | test("^[0-9]")) | select(.aliases[]? | test("CVE")) | .fix_versions] | length' audit-report.json 2>/dev/null || echo 0)
+          if [ "$HIGH_CRITICAL" -gt 0 ]; then
+            echo "::error::Found $HIGH_CRITICAL high/critical vulnerabilities"
+            exit 1
+          fi
+          echo "No high/critical vulnerabilities found"
+
+      - name: Upload audit report
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: pip-audit-report
+          path: audit-report.json
+          retention-days: 30
+
+      - name: Upload SARIF
+        uses: github/codeql-action/upload-sarif@v3
+        if: always()
+        with:
+          sarif_file: audit-report.json
+          category: pip-audit
+
+  dependency-check:
+    name: Dependency Conflict Check
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v4
+        with:
+          version: "latest"
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: "uv"
+
+      - name: Install dependencies
+        run: uv sync --all-extras
+
+      - name: Run pip check
+        run: uv run pip check
+
+      - name: Verify lock file is up to date
+        run: uv lock --check

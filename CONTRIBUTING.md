@@ -120,3 +120,90 @@ logs. Keep it separate from engine changes and include poor results and failed r
 The [current community benchmark guide](docs/COMMUNITY_BENCHMARKS.md) remains available for measurements made
 with today's tools. The [new protocol](docs/BENCHMARK_PROTOCOL.md) defines the draft standard and future approval
 workflow. Its draft status must remain visible: existing reports are not automatically standard or approved.
+
+## Dependency Management
+
+Strata uses **uv** for reproducible dependency management with automated security updates.
+
+### Files
+
+| File | Purpose |
+|------|---------|
+| `pyproject.toml` | Project metadata and dependency declarations (minor-range pins) |
+| `uv.lock` | Exact versions for reproducible builds (committed) |
+| `requirements.txt` | Minor-range pins for pip-based installs (legacy compatibility) |
+| `requirements-*.txt` | Build/monitor/nvfp4 specific dependencies |
+
+### Pinning Strategy
+
+| Tier | Pattern | Examples |
+|------|---------|----------|
+| Core runtime | `>=X.Y.Z,<X.(Y+1).0` | `pillow>=13.0.0,<14.0.0` |
+| Security-critical transitive | `>=X.Y.Z,<X.(Y+1).0` | `urllib3>=2.8.0,<3.0.0` |
+| Build tools | `>=X.Y.Z,<X.(Y+1).0` | `cmake>=4.4.3,<5.0.0` |
+| Platform-specific | Exact (`==`) | `colorama==0.4.6; sys_platform=="win32"` |
+
+**Why minor-range?** `>=13.0.0,<14.0.0` allows patch/minor security updates (13.0.1, 13.1.0) but blocks breaking major changes (14.0.0).
+
+### Updating Dependencies
+
+**For maintainers:**
+```bash
+# Update a specific package to latest allowed version
+uv lock --upgrade-package pillow
+
+# Update all packages within allowed ranges
+uv lock --upgrade
+
+# Sync environment to lockfile
+uv sync --all-extras
+```
+
+**CI validation:** Every PR runs `uv lock --check` and `uv run pip check` to ensure lockfile consistency.
+
+### Automated Security Updates
+
+| Tool | Schedule | Action |
+|------|----------|--------|
+| Dependabot | Weekly (Mon 06:00 UTC) | Creates grouped PRs for minor/patch updates |
+| GitHub Action | Weekly (Mon 06:00 UTC) | Runs `pip-audit`, fails on high/critical CVEs |
+| PR Check | Every PR | `uv lock --check` + `uv run pip check` |
+
+**Severity response:**
+| Severity | Response | Action |
+|----------|----------|--------|
+| Critical (CVSS ≥ 9.0) | 24 hours | Emergency patch |
+| High (CVSS 7.0-8.9) | 72 hours | Priority PR |
+| Medium (CVSS 4.0-6.9) | 2 weeks | Regular PR |
+| Low (CVSS < 4.0) | Next release | Batch update |
+
+### Running Security Checks Locally
+
+```bash
+# Full security audit
+pip-audit
+
+# Dependency conflict check
+pip check
+
+# Verify lockfile matches declared dependencies
+uv lock --check
+
+# Check for conflicts
+uv run pip check
+```
+
+### Accepting Risks
+
+If a vulnerability cannot be fixed (e.g., transitive dep blocked by direct dep), document it in `SECURITY.md` with:
+- CVE ID
+- Affected package and version
+- Reason it cannot be fixed
+- Mitigation in place
+
+### For Fork Maintainers
+
+If you fork Strata, the automated dependency updates will work automatically via GitHub Actions and Dependabot. You only need to:
+1. Enable Dependabot in your fork's settings (Settings → Security → Dependabot)
+2. Ensure GitHub Actions are enabled
+3. Review and merge the weekly Dependabot PRs

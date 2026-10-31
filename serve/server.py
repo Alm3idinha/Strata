@@ -27,6 +27,7 @@ talks to it over stdin/stdout; `MockEngine` is a scripted stand-in that makes ev
 from __future__ import annotations
 
 import argparse
+import asyncio
 import contextlib
 import collections
 import base64
@@ -34,6 +35,7 @@ import hashlib
 import hmac
 import codecs
 import ctypes
+import ipaddress
 import json
 import math
 import os
@@ -2849,11 +2851,71 @@ class Vision:
                 raise ValueError(f"the image could not be read from {path} ({e})") from None
         raise ValueError("an image must be a data: URL, an http(s) URL or a local file path")
 
+    # Blocked IP ranges for SSRF prevention (OWASP: Server-Side Request Forgery)
+    _BLOCKED_NETWORKS = [
+        ipaddress.ip_network("10.0.0.0/8"),          # private IPv4
+        ipaddress.ip_network("172.16.0.0/12"),       # private IPv4
+        ipaddress.ip_network("192.168.0.0/16"),      # private IPv4
+        ipaddress.ip_network("127.0.0.0/8"),         # loopback IPv4
+        ipaddress.ip_network("169.254.0.0/16"),      # link-local (incl. cloud metadata 169.254.169.254)
+        ipaddress.ip_network("::1/128"),             # IPv6 loopback
+        ipaddress.ip_network("fc00::/7"),            # IPv6 unique-local
+        ipaddress.ip_network("fe80::/10"),           # IPv6 link-local
+        ipaddress.ip_network("100.64.0.0/10"),       # carrier-grade NAT
+        ipaddress.ip_network("0.0.0.0/8"),           # reserved
+        ipaddress.ip_network("224.0.0.0/4"),         # multicast
+        ipaddress.ip_network("240.0.0.0/4"),         # reserved
+    ]
+
+    @staticmethod
+    def _is_blocked_ip(ip_str: str) -> bool:
+        """True when the IP is in a private, loopback, link-local, or otherwise reserved range."""
+        try:
+            ip = ipaddress.ip_address(ip_str)
+        except ValueError:
+            return True                                   # not a valid IP: refuse it
+        for net in Vision._BLOCKED_NETWORKS:
+            if ip in net:
+                return True
+        return False
+
+    @staticmethod
+    def _resolve_host(host: str) -> list[str]:
+        """All IP addresses the host resolves to, via getaddrinfo (handles DNS rebinding: a name may point at
+        several IPs and change between checks).  Raises ValueError when every IP is blocked or unresolvable."""
+        try:
+            infos = socket.getaddrinfo(host, None, proto=socket.IPPROTO_TCP)
+        except socket.gaierror as e:
+            raise ValueError(f"the image URL's host {host!r} could not be resolved: {e}") from None
+        ips = []
+        for family, _type, _proto, _canon, sockaddr in infos:
+            ip = sockaddr[0]
+            if family == socket.AF_INET6 and ip.startswith("::ffff:"):      # mapped IPv4
+                ip = ip[7:]
+            if ip not in ips:
+                ips.append(ip)
+        if not ips:
+            raise ValueError(f"the image URL's host {host!r} resolved to no IP addresses")
+        return ips
+
     @staticmethod
     def download(url: str) -> bytes:
         """An image URL's bytes, at most IMAGE_URL_MAX of them: the whole response was read, so a huge or endless one
-        filled the memory.  One that cannot be read is a ValueError (a 400 that says so), not a dropped connection."""
+        filled the memory.  One that cannot be read is a ValueError (a 400 that says so), not a dropped connection.
+
+        The host is resolved and every IP it points at is checked against private, loopback, link-local and other
+        reserved ranges before anything is fetched, so a page that rebinds a name to the metadata service (or to
+        another machine on the LAN) cannot make the server fetch for it (OWASP SSRF prevention)."""
         too_big = f"the image URL's file is over {IMAGE_URL_MAX >> 20} MiB"
+        host = host_name(urlsplit(url).netloc) or ""
+        if not host:
+            raise ValueError("the image URL has no host")
+        ips = Vision._resolve_host(host)
+        for ip in ips:
+            if Vision._is_blocked_ip(ip):
+                print(f"[strata] image URL blocked: {url} resolved to {ip} (a private/loopback/link-local address)",
+                      flush=True)
+                raise ValueError(f"the image URL {url} points at {ip}, which is not allowed (a private or loopback address)")
         try:
             with urllib.request.urlopen(urllib.request.Request(url, headers={"User-Agent": "strata"}), timeout=60) as r:
                 size = r.headers.get("Content-Length") or ""
@@ -6576,6 +6638,12 @@ def make_handler(svc: Service):
         def send_response(self, code, message=None):
             self.answer_started = True                 # a malformed-request answer can only replace one not yet begun
             super().send_response(code, message)
+            # Security headers on every answer: clickjacking, MIME sniffing, referrer leakage.  The web page is the
+            # only thing served here and it is same-origin, so these are the safe, default-on values (OWASP).
+            self.send_header("X-Frame-Options", "SAMEORIGIN")
+            self.send_header("X-Content-Type-Options", "nosniff")
+            self.send_header("Referrer-Policy", "no-referrer")
+            self.send_header("Content-Security-Policy", "default-src 'self'; frame-ancestors 'self'")
 
         def _chunked(self) -> bool:
             """#893: a body sent as Transfer-Encoding: chunked (a relay or proxy that does not buffer it).  By RFC 9112
